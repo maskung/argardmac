@@ -11,9 +11,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>th.suphanutthanyaboon.argard</string>
 	<key>CFBundleVersion</key>
-	<string>1.1.4</string>
+	<string>1.1.5</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.4</string>
+	<string>1.1.5</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Suphanut Thanyaboon (suphanut@gmail.com)</string>
 	<key>CFBundlePackageType</key>

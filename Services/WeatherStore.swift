@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import os
 
 /// State กลางของแอพ — เก็บข้อมูลที่ดึงมา + error + เวลาอัปเดตล่าสุด
 /// และคุม auto-refresh ตาม REFRESH_SECONDS
@@ -19,6 +20,7 @@ final class WeatherStore: ObservableObject {
     let config: AppConfig
     private let service: WeatherService
     private var refreshTask: Task<Void, Never>?
+    private let logger = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "store")
 
     init(config: AppConfig = AppConfig.load()) {
         self.config = config
@@ -47,6 +49,11 @@ final class WeatherStore: ObservableObject {
         // รวม error แบบเดียวกับ Python: obs มาก่อน แล้ว forecast แล้ว aqi
         let errors = [o.1, f.1, a.1].filter { !$0.isEmpty }
         errorMessage = errors.joined(separator: " • ")
+        if errors.isEmpty {
+            logger.log("refresh สำเร็จ: obs + forecast(\(self.forecast.count) ชม.) + aqi")
+        } else {
+            logger.error("refresh มี error: \(self.errorMessage, privacy: .public)")
+        }
     }
 
     /// เริ่ม auto-refresh loop (เรียกจาก .task ของ view)
@@ -69,16 +76,41 @@ final class WeatherStore: ObservableObject {
 
     /// ดึงข้อมูลใหม่ทันทีทุกครั้งที่แอพกลับมา active หรือ Mac ตื่นจาก sleep
     /// — รับประกันว่าพอผู้ใช้กลับมาดูแอพจะได้ข้อมูลสดเสมอ แม้ timer จะถูกพักไปนาน
+    ///
+    /// และหยุดดึง API เมื่อหน้าจอ/ฝาปิด (ประหยัดโควต้ารายวัน):
+    /// - หน้าจอ sleep (ปิดฝา/จอดับ) → หยุด loop ทั้งหมด ไม่ยิง API แม้เครื่องยังไม่หลับ
+    /// - หน้าจอตื่น / Mac ตื่น → refresh ทันที + เริ่ม loop ใหม่
     func bindLifecycleRefresh() {
+        let ws = NSWorkspace.shared.notificationCenter
+
+        ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                self?.logger.log("หน้าจอ sleep — หยุด auto-refresh (ประหยัดโควต้า API)")
+                self?.stopAutoRefresh()
+            }
+        }
+        ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.logger.log("หน้าจอตื่น — refresh ทันที + เริ่ม auto-refresh ใหม่")
+                await self.refresh()
+                self.startAutoRefresh()
+            }
+        }
+        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.logger.log("Mac ตื่นจาก sleep — refresh ทันที + เริ่ม auto-refresh ใหม่")
+                await self.refresh()
+                self.startAutoRefresh()
+            }
+        }
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { await self?.refresh() }
-        }
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { await self?.refresh() }
+            Task { @MainActor in
+                await self?.refresh()
+            }
         }
     }
 }
