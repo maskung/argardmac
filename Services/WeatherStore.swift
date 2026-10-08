@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 
 /// State กลางของแอพ — เก็บข้อมูลที่ดึงมา + error + เวลาอัปเดตล่าสุด
 /// และคุม auto-refresh ตาม REFRESH_SECONDS
@@ -64,5 +65,20 @@ final class WeatherStore: ObservableObject {
     func stopAutoRefresh() {
         refreshTask?.cancel()
         refreshTask = nil
+    }
+
+    /// ดึงข้อมูลใหม่ทันทีทุกครั้งที่แอพกลับมา active หรือ Mac ตื่นจาก sleep
+    /// — รับประกันว่าพอผู้ใช้กลับมาดูแอพจะได้ข้อมูลสดเสมอ แม้ timer จะถูกพักไปนาน
+    func bindLifecycleRefresh() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { await self?.refresh() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { await self?.refresh() }
+        }
     }
 }
