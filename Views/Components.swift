@@ -37,7 +37,7 @@ struct Card<Content: View>: View {
             content()
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 245, alignment: .topLeading)
         .glassCard()
     }
 }
@@ -69,56 +69,145 @@ struct InfoRow: View {
     }
 }
 
-// MARK: - หยดน้ำวัดความชื้น (น้ำเติมตามระดับ %)
+// MARK: - มาตรวัดความชื้นแบบหน้าปัดอนาล็อก (โซน VERY DRY → DRY → NORMAL → HUMID)
 
-struct DropShape: Shape {
+/// เข็มแบบเรียวแหลม (ปลายแหลม โคนกว้าง)
+struct DialNeedle: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
         var p = Path()
-        p.move(to: CGPoint(x: w / 2, y: 0))
-        // ลงด้านขวาไปก้นหยด
-        p.addCurve(to: CGPoint(x: w / 2, y: h),
-                   control1: CGPoint(x: w, y: h * 0.28),
-                   control2: CGPoint(x: w, y: h * 0.72))
-        // กลับขึ้นด้านซ้าย
-        p.addCurve(to: CGPoint(x: w / 2, y: 0),
-                   control1: CGPoint(x: 0, y: h * 0.72),
-                   control2: CGPoint(x: 0, y: h * 0.28))
+        p.move(to: CGPoint(x: w / 2, y: 0))          // ปลายแหลม
+        p.addLine(to: CGPoint(x: w, y: h * 0.75))    // บ่าขวา
+        p.addLine(to: CGPoint(x: w * 0.62, y: h))    // โคนขวา
+        p.addLine(to: CGPoint(x: w * 0.38, y: h))    // โคนซ้าย
+        p.addLine(to: CGPoint(x: 0, y: h * 0.75))    // บ่าซ้าย
         p.closeSubpath()
         return p
     }
 }
 
-struct DropGauge: View {
-    let ratio: Double              // 0...1
-    private var clamped: CGFloat { CGFloat(min(max(ratio, 0), 1)) }
+struct HumidityDial: View {
+    let humidity: Double?
+    private var v: Double { min(max(humidity ?? 0, 0), 100) }
+    private var needleAngle: Double { -135.0 + 2.7 * v }   // 0% ล่างซ้าย → 100% ล่างขวา (กวาด 270°)
+    private static let ink = Color(red: 0.17, green: 0.17, blue: 0.17)
 
     var body: some View {
         ZStack {
-            // ตัวหยดเปล่า
-            DropShape().fill(.white.opacity(0.07))
-            // น้ำภายใน — สูงตาม ratio ชิดก้น
-            DropShape()
-                .fill(Theme.water)
-                .mask(GeometryReader { geo in
-                    Rectangle()
-                        .frame(height: geo.size.height * clamped)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                })
-            // เส้นผิวน้ำ
-            GeometryReader { geo in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(.white.opacity(0.85))
-                    .frame(height: 3)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .offset(y: -geo.size.height * clamped)
-            }
-            .mask(DropShape())
-            .opacity(clamped > 0.03 ? 1 : 0)
-            // ขอบหยด
-            DropShape().stroke(.white.opacity(0.35), lineWidth: 1.5)
+            face
+            zones
+            ticks
+            numerals
+            needle
+            hub
+            readout
         }
-        .animation(.easeInOut(duration: 0.7), value: clamped)
+        .frame(width: 118, height: 118)
+    }
+
+    /// หน้าปัดขาว + ขอบโลหะ
+    private var face: some View {
+        ZStack {
+            Circle().fill(
+                LinearGradient(colors: [.white, Color(red: 0.94, green: 0.95, blue: 0.96)],
+                               startPoint: .top, endPoint: .bottom))
+            Circle().strokeBorder(
+                LinearGradient(colors: [Color(red: 0.93, green: 0.94, blue: 0.95),
+                                        Color(red: 0.55, green: 0.58, blue: 0.60)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: 3)
+        }
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+    }
+
+    /// แถบโซนสี: 0–30 ส้ม / 30–50 เหลือง / 50–70 เขียว / 70–100 น้ำเงิน
+    private var zones: some View {
+        ZStack {
+            zoneArc(from: 0, to: 30, color: Color(red: 0.96, green: 0.51, blue: 0.13))
+            zoneArc(from: 30, to: 50, color: Color(red: 0.99, green: 0.72, blue: 0.07))
+            zoneArc(from: 50, to: 70, color: Color(red: 0.23, green: 0.67, blue: 0.21))
+            zoneArc(from: 70, to: 100, color: Color(red: 0.11, green: 0.46, blue: 0.74))
+        }
+    }
+
+    private func zoneArc(from: Double, to: Double, color: Color) -> some View {
+        Circle()
+            .trim(from: from / 100 * 0.75, to: to / 100 * 0.75)
+            .stroke(color, style: StrokeStyle(lineWidth: 11, lineCap: .butt))
+            .rotationEffect(.degrees(135))
+            .padding(11)
+    }
+
+    /// ขีดสเกลละเอียดทุก 5% (ทุก 10 เป็นขีดใหญ่)
+    private var ticks: some View {
+        ForEach(Array(stride(from: 0.0, through: 100.0, by: 5.0)), id: \.self) { val in
+            tick(val)
+        }
+    }
+
+    private func tick(_ val: Double) -> some View {
+        let angle = -135.0 + 2.7 * val
+        let decade = Int(val) % 10 == 0
+        let line = Capsule()
+            .fill(decade ? Self.ink.opacity(0.8) : Self.ink.opacity(0.35))
+            .frame(width: decade ? 1.5 : 1, height: decade ? 7 : 4)
+            .offset(y: -38)
+        return line.rotationEffect(.degrees(angle))
+    }
+
+    /// ตัวเลข 0–100 รอบหน้าปัด (ตั้งตรงเสมอ อ่านง่าย)
+    private var numerals: some View {
+        ForEach([0.0, 20.0, 40.0, 60.0, 80.0, 100.0], id: \.self) { val in
+            numeral(val)
+        }
+    }
+
+    private func numeral(_ val: Double) -> some View {
+        let radians = (-135.0 + 2.7 * val) * .pi / 180
+        return Text("\(Int(val))")
+            .font(.system(size: 9, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(Self.ink)
+            .offset(x: sin(radians) * 27, y: -cos(radians) * 27)
+    }
+
+    /// เข็มแดง + หาง
+    private var needle: some View {
+        let tail = Capsule()
+            .fill(Color(red: 0.82, green: 0.17, blue: 0.17))
+            .frame(width: 3, height: 9)
+            .offset(y: 8)
+        let arm = DialNeedle()
+            .fill(Color(red: 0.82, green: 0.17, blue: 0.17))
+            .frame(width: 8, height: 32)
+            .offset(y: -14)
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        return ZStack { tail; arm }
+            .rotationEffect(.degrees(needleAngle))
+            .animation(.spring(response: 1.0, dampingFraction: 0.6), value: needleAngle)
+    }
+
+    private var hub: some View {
+        ZStack {
+            Circle().fill(Color(red: 0.82, green: 0.17, blue: 0.17)).frame(width: 10, height: 10)
+            Circle().fill(Color(red: 0.55, green: 0.10, blue: 0.10)).frame(width: 4, height: 4)
+        }
+        .shadow(color: .black.opacity(0.3), radius: 2)
+    }
+
+    /// ตัวเลขอ่านค่ากลางหน้าปัด (วางต่ำซ้อนโค้งล่างของวงกลม)
+    private var readout: some View {
+        VStack(spacing: 0) {
+            Text(WX.fmtInt(humidity, suffix: "%"))
+                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Self.ink)
+            Text("HUMIDITY")
+                .font(.system(size: 6.5, weight: .bold))
+                .kerning(1)
+                .foregroundStyle(Self.ink.opacity(0.6))
+        }
+        .offset(y: 35)
     }
 }
 

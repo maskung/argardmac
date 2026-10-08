@@ -170,26 +170,25 @@ struct HumidityCard: View {
 
     var body: some View {
         let h = obs.humidity ?? 0
-        let desc = WX.humidity(obs.humidity)
-        let active = h < 30 ? 0 : (h < 60 ? 1 : 2)
         Card(title: "Humidity", systemIcon: "humidity",
-             accent: Theme.water, badge: desc.emojiText) {
-            HStack(spacing: 18) {
-                DropGauge(ratio: h / 100)
-                    .frame(width: 84, height: 106)
-                VStack(alignment: .leading, spacing: 7) {
+             accent: Theme.water, badge: Self.zoneName(h)) {
+            HStack(spacing: 16) {
+                HumidityDial(humidity: obs.humidity)
+                VStack(alignment: .leading, spacing: 8) {
                     Text("RELATIVE HUMIDITY")
                         .font(.system(size: 10, weight: .semibold))
                         .kerning(1.2)
                         .foregroundStyle(.white.opacity(0.45))
-                    Text(WX.fmtInt(obs.humidity, suffix: "%"))
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.water)
-                    HStack(spacing: 5) {
-                        levelTag("🌵 Dry", isActive: active == 0)
-                        levelTag("🌤️ Normal", isActive: active == 1)
-                        levelTag("💦 Humid", isActive: active == 2)
+                    // โซนตามหน้าปัด: 0–30 / 30–50 / 50–70 / 70–100 (สีตรงกับแถบบนหน้าปัด)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 5) {
+                            levelTag("🏜️ Very Dry", tint: Color(red: 0.96, green: 0.51, blue: 0.13), isActive: h < 30)
+                            levelTag("🌵 Dry", tint: Color(red: 0.99, green: 0.72, blue: 0.07), isActive: h >= 30 && h < 50)
+                        }
+                        HStack(spacing: 5) {
+                            levelTag("🌤️ Normal", tint: Color(red: 0.23, green: 0.67, blue: 0.21), isActive: h >= 50 && h < 70)
+                            levelTag("💦 Humid", tint: Color(red: 0.11, green: 0.46, blue: 0.74), isActive: h >= 70)
+                        }
                     }
                 }
                 Spacer(minLength: 0)
@@ -197,17 +196,26 @@ struct HumidityCard: View {
         }
     }
 
-    private func levelTag(_ text: String, isActive: Bool) -> some View {
+    /// ชื่อโซนสำหรับ badge ตรงกับโซนบนหน้าปัด
+    private static func zoneName(_ h: Double) -> String {
+        if h < 30 { return "🏜️ VERY DRY" }
+        if h < 50 { return "🌵 DRY" }
+        if h < 70 { return "🌤️ NORMAL" }
+        return "💦 HUMID"
+    }
+
+    private func levelTag(_ text: String, tint: Color, isActive: Bool) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(isActive ? AnyShapeStyle(.white)
                                       : AnyShapeStyle(Color.white.opacity(0.45)))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(isActive ? AnyShapeStyle(Theme.water)
+            .background(isActive ? AnyShapeStyle(tint)
                                  : AnyShapeStyle(Color.white.opacity(0.07)),
                         in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(isActive ? 0.2 : 0.08)))
+            .overlay(Capsule().strokeBorder(.white.opacity(isActive ? 0.25 : 0.08)))
+            .shadow(color: isActive ? tint.opacity(0.6) : .clear, radius: 5)
     }
 }
 
@@ -241,21 +249,27 @@ struct MoonCard: View {
         Card(title: "Moon Phase", systemIcon: "moonphase.full.moon",
               accent: Theme.moonGrad,
               badge: moon.isWanPhra ? "☸️ วันพระ" : nil) {
-            VStack(spacing: 6) {
-                Text(moon.emoji)
-                    .font(.system(size: 44))
-                    .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.8), radius: 18)
-                    .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.5), radius: 6)
-                Text(moon.phaseName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(moon.thaiLunarText)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.85))
-                if moon.isNewMoon {
-                    Text("🌑 NEW MOON!").font(.system(size: 12, weight: .bold)).foregroundStyle(.yellow)
-                } else if moon.isFullMoon {
-                    Text("🌕 FULL MOON!").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+            VStack(spacing: 10) {
+                // emoji วางขนานกับชื่อดวงจันทร์ (ประหยัดความสูงการ์ด)
+                HStack(spacing: 14) {
+                    Text(moon.emoji)
+                        .font(.system(size: 40))
+                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.8), radius: 16)
+                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.5), radius: 5)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(moon.phaseName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(moon.thaiLunarText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.85))
+                        if moon.isNewMoon {
+                            Text("🌑 NEW MOON!").font(.system(size: 11, weight: .bold)).foregroundStyle(.yellow)
+                        } else if moon.isFullMoon {
+                            Text("🌕 FULL MOON!").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        }
+                    }
+                    Spacer(minLength: 0)
                 }
                 Divider().overlay(.white.opacity(0.12))
                 InfoRow("📊 Phase", WX.fmt(moon.phase * 100, 1, suffix: "%"))
