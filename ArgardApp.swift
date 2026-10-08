@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// ข้อมูลเวอร์ชั่นของแอพ (แก้ที่เดียว — อย่าลืมแก้ Info.plist ให้ตรงกันตอน bump)
+enum AppInfo {
+    static let version = "1.0.1"
+    static let copyright = "Copyright © 2026 Suphanut Thanyaboon (suphanut@gmail.com)"
+}
+
 @main
 struct ArgardApp: App {
     @StateObject private var store = WeatherStore()

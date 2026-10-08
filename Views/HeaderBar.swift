@@ -11,8 +11,17 @@ struct HeaderBar: View {
                 .foregroundStyle(.orange, .yellow)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Argard • \(store.obs.neighborhood.isEmpty ? store.config.stationID : store.obs.neighborhood)")
-                    .font(.system(size: 15, weight: .bold))
+                HStack(spacing: 6) {
+                    Text("Argard • \(store.obs.neighborhood.isEmpty ? store.config.stationID : store.obs.neighborhood)")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("v\(AppInfo.version)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.07), in: Capsule())
+                }
                 if !store.obs.obsTimeLocal.isEmpty {
                     Text("Station \(store.config.stationID) • Obs \(store.obs.obsTimeLocal)")
                         .font(.system(size: 11))
