@@ -278,7 +278,7 @@ struct MoonCard: View {
                 } else {
                     InfoRow("🌑 Until next", WX.fmt(moon.daysUntilNew, 0, suffix: " days"))
                 }
-                InfoRow("📆 Next new", moon.nextNewMoon.formatted(.dateTime.month().day()))
+                InfoRow("📆 Next new", MoonInfo.thaiBuddhistDate(moon.nextNewMoon))
             }
         }
     }

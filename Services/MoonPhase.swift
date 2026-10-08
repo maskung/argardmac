@@ -61,4 +61,13 @@ struct MoonInfo {
             return ("แรม \(day) ค่ำ", day == 8 || day == 15)
         }
     }
+
+    /// วันที่แบบไทยพร้อมปี พ.ศ. เช่น "21 ต.ค. 2569"
+    static func thaiBuddhistDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "th_TH")
+        f.calendar = Calendar(identifier: .buddhist)
+        f.dateFormat = "d MMM yyyy"
+        return f.string(from: date)
+    }
 }
