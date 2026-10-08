@@ -219,13 +219,17 @@ struct PressureAQICard: View {
         let aqDesc = WX.aqi(air.usAqi)
         Card(title: "Barometer • Air Quality", systemIcon: "barometer",
              accent: Theme.mintG, badge: "AQI \(WX.fmtInt(air.usAqi))") {
-            InfoRow("🌡️ Pressure", WX.fmt(obs.metric.pressure, 0, suffix: " hPa"))
-            Divider().overlay(.white.opacity(0.12))
-            InfoRow("🇺🇸 US AQI",
-                    "\(WX.fmtInt(air.usAqi))  \(aqDesc.emojiText)",
-                    valueColor: aqDesc.severity.color)
-            InfoRow("💨 PM2.5", WX.fmt(air.pm25, 1, suffix: " µg/m³"))
-            InfoRow("🌫️ PM10", WX.fmt(air.pm10, 1, suffix: " µg/m³"))
+            HStack(spacing: 16) {
+                BarometerGauge(pressure: obs.metric.pressure)
+                VStack(alignment: .leading, spacing: 6) {
+                    InfoRow("🇺🇸 US AQI",
+                            "\(WX.fmtInt(air.usAqi))  \(aqDesc.emojiText)",
+                            valueColor: aqDesc.severity.color)
+                    AQIBar(aqi: air.usAqi)
+                    InfoRow("💨 PM2.5", WX.fmt(air.pm25, 1, suffix: " µg/m³"))
+                    InfoRow("🌫️ PM10", WX.fmt(air.pm10, 1, suffix: " µg/m³"))
+                }
+            }
         }
     }
 }

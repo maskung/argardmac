@@ -222,6 +222,161 @@ struct WindCompass: View {
     }
 }
 
+// MARK: - หน้าปัดบารอมิเตอร์แบบเข็ม (สเกล 960–1060 hPa)
+
+struct BarometerGauge: View {
+    let pressure: Double?
+    private let minP = 960.0, maxP = 1060.0
+    private var t: Double { min(max(((pressure ?? minP) - minP) / (maxP - minP), 0), 1) }
+    private var needleAngle: Double { -135.0 + 270.0 * t }
+
+    var body: some View {
+        ZStack {
+            zones
+            ticks
+            numbers
+            needle
+            Circle().fill(Theme.gold).frame(width: 6, height: 6)
+            value
+        }
+        .frame(width: 100, height: 100)
+    }
+
+    /// โซนสี: ต่ำ <1000 ฟ้า • ปกติ 1000–1025 เขียว • สูง >1025 ส้ม
+    private var zones: some View {
+        ZStack {
+            zoneArc(from: 0.0, to: 0.4, color: .cyan)
+            zoneArc(from: 0.4, to: 0.65, color: .green)
+            zoneArc(from: 0.65, to: 1.0, color: .orange)
+        }
+    }
+
+    /// ขีดสเกลทุก 20 hPa (ทุก 40 เป็นขีดใหญ่)
+    private var ticks: some View {
+        ForEach(Array(stride(from: minP, through: maxP, by: 20.0)), id: \.self) { v in
+            tickMark(value: v)
+        }
+    }
+
+    private func tickMark(value v: Double) -> some View {
+        let angle = -135.0 + 270.0 * ((v - minP) / 100.0)
+        let major = Int(v) % 40 == 0
+        let line = Capsule()
+            .fill(major ? Color.white.opacity(0.55) : Color.white.opacity(0.25))
+            .frame(width: major ? 2 : 1.5, height: major ? 7 : 4)
+            .offset(y: -35)
+        return line.rotationEffect(.degrees(angle))
+    }
+
+    /// ตัวเลข 980 / 1000 / 1020 / 1040 รอบหน้าปัด
+    private var numbers: some View {
+        ForEach([980.0, 1000.0, 1020.0, 1040.0], id: \.self) { v in
+            dialNumber(value: v)
+        }
+    }
+
+    private func dialNumber(value v: Double) -> some View {
+        let radians = (-135.0 + 270.0 * ((v - minP) / 100.0)) * Double.pi / 180
+        let text = Text("\(Int(v))")
+            .font(.system(size: 7, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(.white.opacity(0.45))
+        return text.offset(x: sin(radians) * 24, y: -cos(radians) * 24)
+    }
+
+    /// เข็ม + หางเข็ม
+    private var needle: some View {
+        let tail = Capsule()
+            .fill(Color.white.opacity(0.4))
+            .frame(width: 2.5, height: 10)
+            .offset(y: 7)
+        let arm = Capsule()
+            .fill(Theme.gold)
+            .frame(width: 3, height: 26)
+            .offset(y: -9)
+            .shadow(color: .yellow.opacity(0.5), radius: 4)
+        return ZStack { tail; arm }
+            .rotationEffect(.degrees(needleAngle))
+            .animation(.spring(response: 1.1, dampingFraction: 0.65), value: needleAngle)
+    }
+
+    /// ค่ากดอากาศกลางหน้าปัด
+    private var value: some View {
+        VStack(spacing: 0) {
+            Text(WX.fmt(pressure, 0))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .monospacedDigit()
+            Text("hPa")
+                .font(.system(size: 7, weight: .semibold))
+                .kerning(1)
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .offset(y: 17)
+    }
+
+    /// วงโค้งโซนสี (กวาด 270° เว้นช่องล่าง)
+    private func zoneArc(from: Double, to: Double, color: Color) -> some View {
+        Circle()
+            .trim(from: from * 0.75, to: to * 0.75)
+            .stroke(color.opacity(0.35), style: StrokeStyle(lineWidth: 5, lineCap: .butt))
+            .rotationEffect(.degrees(135))
+            .padding(8)
+    }
+}
+
+// MARK: - แถบสี AQI มาตรฐาน US EPA พร้อมหมุดชี้ค่า
+
+struct AQIBar: View {
+    let aqi: Double?
+    // (ค่าสิ้นสุดช่วง, สี) ตามมาตรฐาน US EPA
+    private let segs: [(Double, Color)] = [
+        (50, .green), (100, .yellow), (150, .orange), (200, .red),
+        (300, .purple), (500, Color(red: 0.55, green: 0.12, blue: 0.18)),
+    ]
+    private var ratio: CGFloat { CGFloat(min(max((aqi ?? 0) / 500.0, 0), 1)) }
+    private var activeIndex: Int {
+        let v = aqi ?? 0
+        for (i, s) in segs.enumerated() where v < s.0 { return i }
+        return segs.count - 1
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    HStack(spacing: 0) {
+                        ForEach(0..<segs.count, id: \.self) { i in
+                            let start = i == 0 ? 0.0 : segs[i - 1].0
+                            Rectangle()
+                                .fill(segs[i].1.opacity(i == activeIndex ? 0.95 : 0.28))
+                                .frame(width: geo.size.width * (segs[i].0 - start) / 500.0)
+                                .shadow(color: i == activeIndex ? segs[i].1.opacity(0.7) : .clear, radius: 4)
+                        }
+                    }
+                    .clipShape(Capsule())
+                    // หมุดขาวชี้ค่าปัจจุบัน
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: 2.5, height: 18)
+                        .position(x: geo.size.width * ratio, y: geo.size.height / 2)
+                        .shadow(color: .white.opacity(0.8), radius: 3)
+                }
+            }
+            .frame(height: 18)
+            HStack {
+                Text("0").foregroundStyle(.white.opacity(0.4))
+                Spacer()
+                Text("250").foregroundStyle(.white.opacity(0.4))
+                Spacer()
+                Text("500").foregroundStyle(.white.opacity(0.4))
+            }
+            .font(.system(size: 8))
+            .monospacedDigit()
+        }
+        .animation(.easeInOut(duration: 0.7), value: activeIndex)
+    }
+}
+
 // MARK: - แถบ gauge เรืองแสง (แทน ███░░░░ ของ Python)
 
 struct GaugeBar: View {
