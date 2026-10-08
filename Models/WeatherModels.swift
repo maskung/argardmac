@@ -80,70 +80,61 @@ struct PWSMetric: Decodable {
     }
 }
 
-// MARK: - OpenWeather 2.5 forecast (ทุก 3 ชม. 40 จุด)
+// MARK: - พยากรณ์รายชั่วโมง (Open-Meteo — ฟรี ไม่ต้องใช้ key)
 
-struct OWForecastResponse: Decodable {
-    let list: [OWForecastItem]?
-}
-
-struct OWForecastItem: Decodable {
-    var dt: TimeInterval = 0
+/// โมเดลกลางสำหรับพยากรณ์รายชั่วโมง ที่ view ใช้ทั้งแอพ
+/// (เดิมใช้ของ OpenWeather 3 ชม./จุด — ตอนนี้ map มาจาก Open-Meteo)
+struct OWForecastItem {
+    var dt: TimeInterval = 0        // epoch seconds
     var temp: Double?
     var feelsLike: Double?
-    var pressure: Double?
-    var humidity: Double?
-    var weatherMain = ""
+    var pressure: Double?           // hPa
+    var humidity: Double?           // %
     var weatherDesc = ""
-    var weatherIcon = ""
-    var clouds: Double?
-    var windSpeed: Double?     // m/s
+    var weatherIcon = ""            // เก็บเป็น icon code ของ OpenWeather (ดู WX.weatherEmoji)
+    var clouds: Double?             // %
+    var windSpeed: Double?          // m/s
     var windDeg: Double?
-    var visibility: Double?    // เมตร
-    var pop: Double?           // 0...1
-    var rain3h: Double?        // mm
-
-    enum CodingKeys: String, CodingKey {
-        case dt, main, weather, clouds, wind, visibility, pop, rain
-    }
-    enum MainKeys: String, CodingKey { case temp, feels_like, pressure, humidity }
-    enum WindKeys: String, CodingKey { case speed, deg }
-    enum CloudKeys: String, CodingKey { case all }
-    enum RainKeys: String, CodingKey { case h3 = "3h" }
-
-    init() {}
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        dt = c.flexibleDouble(.dt) ?? 0
-        if let mc = try? c.nestedContainer(keyedBy: MainKeys.self, forKey: .main) {
-            temp = mc.flexibleDouble(.temp)
-            feelsLike = mc.flexibleDouble(.feels_like)
-            pressure = mc.flexibleDouble(.pressure)
-            humidity = mc.flexibleDouble(.humidity)
-        }
-        if let wc = try? c.decodeIfPresent([WeatherBit].self, forKey: .weather), let first = wc.first {
-            weatherMain = first.main ?? ""
-            weatherDesc = first.description ?? ""
-            weatherIcon = first.icon ?? ""
-        }
-        if let cc = try? c.nestedContainer(keyedBy: CloudKeys.self, forKey: .clouds) {
-            clouds = cc.flexibleDouble(.all)
-        }
-        if let wnc = try? c.nestedContainer(keyedBy: WindKeys.self, forKey: .wind) {
-            windSpeed = wnc.flexibleDouble(.speed)
-            windDeg = wnc.flexibleDouble(.deg)
-        }
-        visibility = c.flexibleDouble(.visibility)
-        pop = c.flexibleDouble(.pop)
-        if let rc = try? c.nestedContainer(keyedBy: RainKeys.self, forKey: .rain) {
-            rain3h = rc.flexibleDouble(.h3)
-        }
-    }
+    var visibility: Double?         // เมตร
+    var pop: Double?                // 0...1
+    var rain: Double?               // mm ในชั่วโมงนั้น
 }
 
-struct WeatherBit: Decodable {
-    let main: String?
-    let description: String?
-    let icon: String?
+/// คำตอบดิบของ /v1/forecast (timeformat=unixtime)
+struct OMForecastResponse: Decodable {
+    let hourly: OMHourly?
+}
+
+struct OMHourly: Decodable {
+    var time: [Double]?
+    var temperature: [Double?]?
+    var apparentTemperature: [Double?]?
+    var humidity: [Double?]?
+    var precipProbability: [Double?]?
+    var precipitation: [Double?]?
+    var weatherCode: [Double?]?
+    var cloudCover: [Double?]?
+    var visibility: [Double?]?
+    var windSpeed: [Double?]?
+    var windDirection: [Double?]?
+    var pressure: [Double?]?
+    var isDay: [Double?]?
+
+    enum CodingKeys: String, CodingKey {
+        case time
+        case temperature = "temperature_2m"
+        case apparentTemperature = "apparent_temperature"
+        case humidity = "relative_humidity_2m"
+        case precipProbability = "precipitation_probability"
+        case precipitation
+        case weatherCode = "weather_code"
+        case cloudCover = "cloud_cover"
+        case visibility
+        case windSpeed = "wind_speed_10m"
+        case windDirection = "wind_direction_10m"
+        case pressure = "pressure_msl"
+        case isDay = "is_day"
+    }
 }
 
 // MARK: - Open-Meteo Air Quality

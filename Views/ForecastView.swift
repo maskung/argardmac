@@ -44,7 +44,7 @@ struct ForecastHourCard: View {
             InfoRow("👁️ Vis", WX.fmt((hour.visibility ?? 0) / 1000, 1, suffix: " km"))
             InfoRow("🌡️ Pres", WX.fmt(hour.pressure, 0, suffix: " hPa"))
             InfoRow("🌧️ Precip", WX.fmtInt((hour.pop ?? 0) * 100, suffix: " %"))
-            if let rain = hour.rain3h {
+            if let rain = hour.rain, rain > 0 {
                 InfoRow("☔ Rain", WX.fmt(rain, 2, suffix: " mm"))
             }
         }

@@ -41,12 +41,20 @@ struct WeatherService {
     }
 
     var forecastURL: URL? {
-        var c = URLComponents(string: "https://api.openweathermap.org/data/2.5/forecast")
+        var c = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
         c?.queryItems = [
-            .init(name: "lat", value: String(format: "%.4f", config.latitude)),
-            .init(name: "lon", value: String(format: "%.4f", config.longitude)),
-            .init(name: "units", value: "metric"),
-            .init(name: "appid", value: config.openWeatherAPIKey),
+            .init(name: "latitude", value: String(format: "%.4f", config.latitude)),
+            .init(name: "longitude", value: String(format: "%.4f", config.longitude)),
+            .init(name: "hourly", value: [
+                "temperature_2m", "apparent_temperature", "relative_humidity_2m",
+                "precipitation_probability", "precipitation", "weather_code",
+                "cloud_cover", "visibility", "wind_speed_10m", "wind_direction_10m",
+                "pressure_msl", "is_day",
+            ].joined(separator: ",")),
+            .init(name: "wind_speed_unit", value: "ms"),
+            .init(name: "forecast_days", value: "2"),
+            .init(name: "timeformat", value: "unixtime"),
+            .init(name: "timezone", value: "auto"),
         ]
         return c?.url
     }
@@ -76,12 +84,41 @@ struct WeatherService {
         }
     }
 
+    /// พยากรณ์รายชั่วโมงจาก Open-Meteo — ตัดเหลือชั่วโมงปัจจุบันถึง +24 ชม.
     func fetchForecast() async -> ([OWForecastItem], String) {
         guard let url = forecastURL else { return ([], "Bad URL") }
         do {
             let data = try await get(url)
-            let resp = try JSONDecoder().decode(OWForecastResponse.self, from: data)
-            return (resp.list ?? [], "")
+            let resp = try JSONDecoder().decode(OMForecastResponse.self, from: data)
+            guard let h = resp.hourly, let times = h.time else { return ([], "No hourly data") }
+            let cutoff = Date().addingTimeInterval(-90 * 60).timeIntervalSince1970
+
+            var items: [OWForecastItem] = []
+            for (i, t) in times.enumerated() {
+                guard t >= cutoff else { continue }
+                func at(_ arr: [Double?]?, _ i: Int) -> Double? {
+                    guard let arr, i < arr.count else { return nil }
+                    return arr[i]
+                }
+                let wmo = WX.wmo(at(h.weatherCode, i), isDay: (at(h.isDay, i) ?? 1) == 1)
+                items.append(OWForecastItem(
+                    dt: t,
+                    temp: at(h.temperature, i),
+                    feelsLike: at(h.apparentTemperature, i),
+                    pressure: at(h.pressure, i),
+                    humidity: at(h.humidity, i),
+                    weatherDesc: wmo.desc,
+                    weatherIcon: wmo.icon,
+                    clouds: at(h.cloudCover, i),
+                    windSpeed: at(h.windSpeed, i),
+                    windDeg: at(h.windDirection, i),
+                    visibility: at(h.visibility, i),
+                    pop: at(h.precipProbability, i).map { $0 / 100.0 },
+                    rain: at(h.precipitation, i)
+                ))
+                if items.count >= 24 { break }
+            }
+            return (items, items.isEmpty ? "No upcoming hours" : "")
         } catch {
             return ([], errMsg(error))
         }

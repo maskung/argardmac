@@ -8,7 +8,7 @@
 | แหล่ง | เนื้อหา |
 |---|---|
 | Weather.com PWS API | ข้อมูลสดจากสถานี `IMAKHA6` (Makham) — อุณหภูมิ ลม ฝน UV ความกดอากาศ |
-| OpenWeather 2.5 | พยากรณ์ราย 3 ชั่วโมง 12 จุดข้างหน้า |
+| Open-Meteo Forecast | พยากรณ์**รายชั่วโมง** 24 ชม.ข้างหน้า (temp, feels, humid, pop, ฝน, ลม, กดอากาศ, ทัศนวิสัย) |
 | Open-Meteo Air Quality | US AQI, PM2.5, PM10 |
 
 ## วิธี build / รัน
@@ -59,6 +59,9 @@ Argard/
 
 แก้ `STATION_ID`, `API_KEY`, `LATITUDE/LONGITUDE`, `REFRESH_SECONDS` ได้
 แล้วปิด-เปิดแอพใหม่ (หรือกดปุ่ม refresh — ค่า refresh ต้องเปิดใหม่)
+
+> หมายเหตุ: ตั้งแต่เวอร์ชันนี้ พยากรณ์รายชั่วโมงใช้ Open-Meteo (ไม่ต้องมี key) —
+> `API_KEY` ใน section `[OpenWeather]` ไม่ถูกใช้แล้ว เหลือแค่ `LATITUDE/LONGITUDE` ที่ยังใช้อยู่
 
 ## คีย์ลัด
 

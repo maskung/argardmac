@@ -136,6 +136,38 @@ enum WX {
         }
     }
 
+    // WMO weather code (Open-Meteo) → (icon แบบ OpenWeather, คำอธิบาย)
+    // icon แปลงเป็นแบบ OpenWeather เพื่อผ่าน weatherEmoji เดิมได้
+    static func wmo(_ code: Double?, isDay: Bool = true) -> (icon: String, desc: String) {
+        let suffix = isDay ? "d" : "n"
+        guard let c = code.map(Int.init) else { return ("❓", "") }
+        switch c {
+        case 0:  return ("01" + suffix, "Clear Sky")
+        case 1:  return ("02" + suffix, "Mainly Clear")
+        case 2:  return ("02" + suffix, "Partly Cloudy")
+        case 3:  return ("04" + suffix, "Overcast")
+        case 45, 48: return ("50" + suffix, "Fog")
+        case 51: return ("09" + suffix, "Light Drizzle")
+        case 53: return ("09" + suffix, "Drizzle")
+        case 55: return ("09" + suffix, "Heavy Drizzle")
+        case 56, 57: return ("09" + suffix, "Freezing Drizzle")
+        case 61: return ("10" + suffix, "Light Rain")
+        case 63: return ("10" + suffix, "Moderate Rain")
+        case 65: return ("10" + suffix, "Heavy Rain")
+        case 66, 67: return ("13" + suffix, "Freezing Rain")
+        case 71: return ("13" + suffix, "Light Snow")
+        case 73: return ("13" + suffix, "Snow")
+        case 75, 77: return ("13" + suffix, "Heavy Snow")
+        case 80: return ("09" + suffix, "Light Showers")
+        case 81: return ("09" + suffix, "Showers")
+        case 82: return ("09" + suffix, "Violent Showers")
+        case 85, 86: return ("13" + suffix, "Snow Showers")
+        case 95: return ("11" + suffix, "Thunderstorm")
+        case 96, 99: return ("11" + suffix, "Thunderstorm + Hail")
+        default: return ("❓", "Unknown")
+        }
+    }
+
     // icon ของ OpenWeather → emoji
     static func weatherEmoji(_ icon: String) -> String {
         let hasD = icon.contains("d")
