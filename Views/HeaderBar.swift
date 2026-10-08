@@ -43,7 +43,7 @@ struct HeaderBar: View {
                     .lineLimit(1)
             }
 
-            Picker("Page", selection: $store.tab) {
+            Picker("", selection: $store.tab) {
                 Text("Dashboard").tag(WeatherStore.Tab.dashboard)
                 Text("12h Forecast").tag(WeatherStore.Tab.forecast)
             }
