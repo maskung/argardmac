@@ -1,6 +1,89 @@
 import SwiftUI
 
-// MARK: - การ์ดทั้ง 8 ของ Dashboard (ทำหน้าที่แทน panel ของ Python)
+// MARK: - Hero Card — อุณหภูมิใหญ่สุดอลังการ + นาฬิกา
+
+struct HeroCard: View {
+    let store: WeatherStore
+
+    var body: some View {
+        let m = store.obs.metric
+        let feel = WX.feeling(m.heatIndex)
+        let emoji = store.forecast.first.map { WX.weatherEmoji($0.weatherIcon) } ?? "🌤️"
+
+        HStack(alignment: .center, spacing: 20) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("\(store.obs.neighborhood.isEmpty ? store.config.stationID : store.obs.neighborhood) • STATION \(store.config.stationID)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .kerning(1.5)
+                    .foregroundStyle(Theme.textGold)
+
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    Text(WX.fmtInt(m.temp) + "°")
+                        .font(.system(size: 88, weight: .ultraLight, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.textGold)
+                        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+                    Text(emoji)
+                        .font(.system(size: 42))
+                        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+                }
+
+                HStack(spacing: 8) {
+                    HeroChip(icon: "sparkles", text: "Feels \(WX.fmtInt(m.heatIndex))°C",
+                             color: feel.severity.color)
+                    HeroChip(icon: "drop.fill", text: WX.fmtInt(store.obs.humidity, suffix: "%"))
+                    HeroChip(icon: "wind",
+                             text: "\(WX.degToArrow(store.obs.winddir)) \(WX.fmt(WX.msToKmh(m.windSpeed), 0)) km/h")
+                }
+                Text(feel.emojiText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(feel.severity.color)
+            }
+
+            Spacer(minLength: 16)
+
+            VStack(alignment: .trailing, spacing: 5) {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(context.date.formatted(.dateTime.hour().minute().second()))
+                        .font(.system(size: 38, weight: .thin, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+                Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.5))
+                if let updated = store.lastUpdated {
+                    Text("Updated \(updated.formatted(.dateTime.hour().minute().second()))")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity)
+        .glassCard(corner: 20)
+    }
+}
+
+struct HeroChip: View {
+    let icon: String
+    let text: String
+    var color: Color = .white.opacity(0.85)
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Text(text).font(.system(size: 12, weight: .medium)).monospacedDigit()
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.white.opacity(0.08), in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
+    }
+}
+
+// MARK: - การ์ดทั้ง 8 ของ Dashboard
 
 struct ThermalCard: View {
     let obs: PWSObservation
@@ -9,7 +92,7 @@ struct ThermalCard: View {
         let m = obs.metric
         let feel = WX.feeling(m.heatIndex)
         Card(title: "Thermal Comfort", systemIcon: "thermometer.medium",
-             accent: .red, badge: WX.fmt(m.temp, 0, suffix: "°C")) {
+             accent: Theme.fire, badge: WX.fmt(m.temp, 0, suffix: "°C")) {
             InfoRow("🌡️ Temperature", WX.fmt(m.temp, suffix: " °C"))
             InfoRow("🔥 Feels like", WX.fmt(m.heatIndex, suffix: " °C"))
             InfoRow("🤔 Feeling", feel.emojiText, valueColor: feel.severity.color)
@@ -28,7 +111,7 @@ struct WindCard: View {
         let gust = WX.msToKmh(m.windGust)
         let desc = WX.wind(speed)
         Card(title: "Wind • Gust", systemIcon: "wind",
-             accent: .teal, badge: WX.fmt(speed, 0, suffix: " km/h")) {
+             accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h")) {
             InfoRow("🧭 Direction",
                     "\(WX.degToArrow(obs.winddir)) \(WX.fmtInt(obs.winddir))° \(WX.degToCompass(obs.winddir))")
             InfoRow("💨 Speed", WX.fmt(speed, suffix: " km/h"))
@@ -45,7 +128,7 @@ struct RainCard: View {
         let m = obs.metric
         let desc = WX.rain(m.precipRate)
         Card(title: "Rainfall", systemIcon: "cloud.rain",
-             accent: .blue, badge: WX.fmt(m.precipTotal, 0, suffix: " mm")) {
+             accent: Theme.rain, badge: WX.fmt(m.precipTotal, 0, suffix: " mm")) {
             InfoRow("📈 Rate", WX.fmt(m.precipRate, 2, suffix: " mm/h"))
             InfoRow("💧 Intensity", desc.emojiText, valueColor: desc.severity.color)
             InfoRow("📅 Today", WX.fmt(m.precipTotal, 1, suffix: " mm"))
@@ -59,11 +142,10 @@ struct SolarUVCard: View {
     var body: some View {
         let uvDesc = WX.uv(obs.uv)
         let solarDesc = WX.solar(obs.solarRadiation)
-        let uvLevelColor = uvDesc.severity.color
         Card(title: "Solar • UV", systemIcon: "sun.max",
-             accent: .orange, badge: "UV \(WX.fmtInt(obs.uv))") {
-            InfoRow("☀️ UV Index", WX.fmtInt(obs.uv), valueColor: uvLevelColor)
-            InfoRow("😎 UV Level", uvDesc.emojiText, valueColor: uvLevelColor)
+             accent: Theme.solar, badge: "UV \(WX.fmtInt(obs.uv))") {
+            InfoRow("☀️ UV Index", WX.fmtInt(obs.uv), valueColor: uvDesc.severity.color)
+            InfoRow("😎 UV Level", uvDesc.emojiText, valueColor: uvDesc.severity.color)
             InfoRow("⚡ Solar Rad.", WX.fmt(obs.solarRadiation, 0, suffix: " W/m²"))
             VStack(alignment: .leading, spacing: 4) {
                 InfoRow("🔆 Intensity", solarDesc.emojiText, valueColor: solarDesc.severity.color)
@@ -79,16 +161,16 @@ struct HumidityCard: View {
     var body: some View {
         let desc = WX.humidity(obs.humidity)
         return Card(title: "Humidity", systemIcon: "humidity",
-                    accent: .cyan, badge: desc.emojiText) {
+                    accent: Theme.water, badge: desc.emojiText) {
             VStack(spacing: 6) {
                 Text(WX.fmtInt(obs.humidity, suffix: "%"))
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.system(size: 46, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .frame(maxWidth: .infinity)
-                    .foregroundStyle(desc.severity.color)
+                    .foregroundStyle(Theme.water)
                 Text("Relative Humidity")
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.45))
             }
             .padding(.vertical, 4)
         }
@@ -102,9 +184,9 @@ struct PressureAQICard: View {
     var body: some View {
         let aqDesc = WX.aqi(air.usAqi)
         Card(title: "Barometer • Air Quality", systemIcon: "barometer",
-             accent: .mint, badge: "AQI \(WX.fmtInt(air.usAqi))") {
+             accent: Theme.mintG, badge: "AQI \(WX.fmtInt(air.usAqi))") {
             InfoRow("🌡️ Pressure", WX.fmt(obs.metric.pressure, 0, suffix: " hPa"))
-            Divider()
+            Divider().overlay(.white.opacity(0.12))
             InfoRow("🇺🇸 US AQI",
                     "\(WX.fmtInt(air.usAqi))  \(aqDesc.emojiText)",
                     valueColor: aqDesc.severity.color)
@@ -119,22 +201,25 @@ struct MoonCard: View {
 
     var body: some View {
         Card(title: "Moon Phase", systemIcon: "moonphase.full.moon",
-              accent: .indigo,
+              accent: Theme.moonGrad,
               badge: moon.isWanPhra ? "☸️ วันพระ" : nil) {
             VStack(spacing: 6) {
                 Text(moon.emoji)
-                    .font(.system(size: 40))
+                    .font(.system(size: 44))
+                    .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.8), radius: 18)
+                    .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.5), radius: 6)
                 Text(moon.phaseName)
                     .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
                 Text(moon.thaiLunarText)
-                    .font(.system(size: 13, weight: .medium, design: .default))
-                    .foregroundStyle(moon.isWanPhra ? .yellow : .primary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.85))
                 if moon.isNewMoon {
                     Text("🌑 NEW MOON!").font(.system(size: 12, weight: .bold)).foregroundStyle(.yellow)
                 } else if moon.isFullMoon {
-                    Text("🌕 FULL MOON!").font(.system(size: 12, weight: .bold))
+                    Text("🌕 FULL MOON!").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                 }
-                Divider()
+                Divider().overlay(.white.opacity(0.12))
                 InfoRow("📊 Phase", WX.fmt(moon.phase * 100, 1, suffix: "%"))
                 if moon.daysSinceNew < 3 {
                     InfoRow("🌑 Since new", WX.fmt(moon.daysSinceNew, 0, suffix: " days"))
@@ -154,20 +239,20 @@ struct SunSeasonCard: View {
     var body: some View {
         let sun = SunAndSeason.sunTimes(lat: obs.lat ?? 0, lon: obs.lon ?? 0)
         Card(title: "Sun Rise/Set • Seasons", systemIcon: "sunrise",
-             accent: .yellow, badge: "\(season.emoji) \(season.name)") {
+             accent: Theme.gold, badge: "\(season.emoji) \(season.name)") {
             if let sun {
                 InfoRow("🌅 Sunrise", sun.sunrise.formatted(.dateTime.hour().minute()))
                 InfoRow("🌇 Sunset", sun.sunset.formatted(.dateTime.hour().minute()))
                 InfoRow("☀️ Daylight",
                         String(format: "%dh %dm", Int(sun.daylightHours),
                                Int((sun.daylightHours.truncatingRemainder(dividingBy: 1)) * 60)))
-                Divider()
+                Divider().overlay(.white.opacity(0.12))
                 InfoRow("\(season.emoji) Season", season.name)
                 InfoRow("📅 Days in", "\(season.daysIn) days")
                 InfoRow("⏭️ Next", "\(season.nextSeason) (\(season.daysUntilNext)d)")
             } else {
                 Text("No location data")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 12)
             }

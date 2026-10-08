@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// แถบบนสุด — ชื่อสถานี, เวลา, สถานะ, ปุ่ม refresh, สลับหน้า
+/// แถบบนสุด — ชื่อแอพ serif ทองคำ + สถานะ + สลับหน้า (สไตล์กระจก)
 struct HeaderBar: View {
     @ObservedObject var store: WeatherStore
 
@@ -8,46 +8,35 @@ struct HeaderBar: View {
         HStack(spacing: 14) {
             Image(systemName: "sun.max.circle.fill")
                 .font(.system(size: 26))
-                .foregroundStyle(.orange, .yellow)
+                .foregroundStyle(Theme.gold)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Argard • \(store.obs.neighborhood.isEmpty ? store.config.stationID : store.obs.neighborhood)")
-                        .font(.system(size: 15, weight: .bold))
+                HStack(spacing: 8) {
+                    Text("Argard")
+                        .font(.system(size: 18, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.textGold)
                     Text("v\(AppInfo.version)")
                         .font(.system(size: 10, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.07), in: Capsule())
+                        .background(.white.opacity(0.08), in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
                 }
                 if !store.obs.obsTimeLocal.isEmpty {
                     Text("Station \(store.config.stationID) • Obs \(store.obs.obsTimeLocal)")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.5))
                 }
             }
 
             Spacer()
 
-            // นาฬิกาเดิน
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text(context.date.formatted(.dateTime.hour().minute().second()))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-
-            if let updated = store.lastUpdated {
-                Text("Updated \(updated.formatted(.dateTime.hour().minute().second()))")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-
             if !store.errorMessage.isEmpty {
                 Label(store.errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color(red: 1.0, green: 0.45, blue: 0.45))
                     .help(store.errorMessage)
                     .lineLimit(1)
             }
@@ -62,18 +51,28 @@ struct HeaderBar: View {
             Button {
                 Task { await store.refresh() }
             } label: {
-                if store.isLoading {
-                    ProgressView().controlSize(.small).frame(width: 36, height: 22)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 36, height: 22)
+                ZStack {
+                    Circle().fill(.white.opacity(0.08))
+                    Circle().strokeBorder(.white.opacity(0.16))
+                    if store.isLoading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
                 }
+                .frame(width: 30, height: 30)
             }
+            .buttonStyle(.plain)
             .help("Refresh (⌘R) • auto ทุก \(store.refreshSeconds) วินาที")
             .disabled(store.isLoading)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.bar)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+        }
     }
 }
