@@ -112,11 +112,16 @@ struct WindCard: View {
         let desc = WX.wind(speed)
         Card(title: "Wind • Gust", systemIcon: "wind",
              accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h")) {
-            InfoRow("🧭 Direction",
-                    "\(WX.degToArrow(obs.winddir)) \(WX.fmtInt(obs.winddir))° \(WX.degToCompass(obs.winddir))")
-            InfoRow("💨 Speed", WX.fmt(speed, suffix: " km/h"))
-            InfoRow("🌪️ Gust", WX.fmt(gust, suffix: " km/h"))
-            InfoRow("📝 Desc", desc.emojiText, valueColor: desc.severity.color)
+            HStack(spacing: 16) {
+                WindCompass(degrees: obs.winddir)
+                VStack(alignment: .leading, spacing: 6) {
+                    InfoRow("🧭 Direction",
+                            "\(WX.degToArrow(obs.winddir)) \(WX.fmtInt(obs.winddir))° \(WX.degToCompass(obs.winddir))")
+                    InfoRow("💨 Speed", WX.fmt(speed, suffix: " km/h"))
+                    InfoRow("🌪️ Gust", WX.fmt(gust, suffix: " km/h"))
+                    InfoRow("📝 Desc", desc.emojiText, valueColor: desc.severity.color)
+                }
+            }
         }
     }
 }
@@ -144,12 +149,17 @@ struct SolarUVCard: View {
         let solarDesc = WX.solar(obs.solarRadiation)
         Card(title: "Solar • UV", systemIcon: "sun.max",
              accent: Theme.solar, badge: "UV \(WX.fmtInt(obs.uv))") {
-            InfoRow("☀️ UV Index", WX.fmtInt(obs.uv), valueColor: uvDesc.severity.color)
-            InfoRow("😎 UV Level", uvDesc.emojiText, valueColor: uvDesc.severity.color)
-            InfoRow("⚡ Solar Rad.", WX.fmt(obs.solarRadiation, 0, suffix: " W/m²"))
-            VStack(alignment: .leading, spacing: 4) {
-                InfoRow("🔆 Intensity", solarDesc.emojiText, valueColor: solarDesc.severity.color)
-                GaugeBar(value: obs.solarRadiation ?? 0, maxValue: 1200, tint: solarDesc.severity.color)
+            HStack(spacing: 16) {
+                UVGauge(uv: obs.uv)
+                    .frame(width: 84, height: 84)
+                VStack(alignment: .leading, spacing: 6) {
+                    InfoRow("😎 UV Level", uvDesc.emojiText, valueColor: uvDesc.severity.color)
+                    InfoRow("⚡ Solar Rad.", WX.fmt(obs.solarRadiation, 0, suffix: " W/m²"))
+                    VStack(alignment: .leading, spacing: 4) {
+                        InfoRow("🔆 Intensity", solarDesc.emojiText, valueColor: solarDesc.severity.color)
+                        GaugeBar(value: obs.solarRadiation ?? 0, maxValue: 1200, tint: solarDesc.severity.color)
+                    }
+                }
             }
         }
     }
@@ -159,21 +169,45 @@ struct HumidityCard: View {
     let obs: PWSObservation
 
     var body: some View {
+        let h = obs.humidity ?? 0
         let desc = WX.humidity(obs.humidity)
-        return Card(title: "Humidity", systemIcon: "humidity",
-                    accent: Theme.water, badge: desc.emojiText) {
-            VStack(spacing: 6) {
-                Text(WX.fmtInt(obs.humidity, suffix: "%"))
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(Theme.water)
-                Text("Relative Humidity")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.45))
+        let active = h < 30 ? 0 : (h < 60 ? 1 : 2)
+        Card(title: "Humidity", systemIcon: "humidity",
+             accent: Theme.water, badge: desc.emojiText) {
+            HStack(spacing: 18) {
+                DropGauge(ratio: h / 100)
+                    .frame(width: 84, height: 106)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("RELATIVE HUMIDITY")
+                        .font(.system(size: 10, weight: .semibold))
+                        .kerning(1.2)
+                        .foregroundStyle(.white.opacity(0.45))
+                    Text(WX.fmtInt(obs.humidity, suffix: "%"))
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.water)
+                    HStack(spacing: 5) {
+                        levelTag("🌵 Dry", isActive: active == 0)
+                        levelTag("🌤️ Normal", isActive: active == 1)
+                        levelTag("💦 Humid", isActive: active == 2)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            .padding(.vertical, 4)
         }
+    }
+
+    private func levelTag(_ text: String, isActive: Bool) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(isActive ? AnyShapeStyle(.white)
+                                      : AnyShapeStyle(Color.white.opacity(0.45)))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(isActive ? AnyShapeStyle(Theme.water)
+                                 : AnyShapeStyle(Color.white.opacity(0.07)),
+                        in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(isActive ? 0.2 : 0.08)))
     }
 }
 
