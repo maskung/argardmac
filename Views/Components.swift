@@ -1,5 +1,21 @@
 import SwiftUI
 
+// MARK: - Live — บังคับให้ subtree ถูกประเมินใหม่ทุก 1 วินาที
+/// ปกติ SwiftUI อัพเดท view ตาม objectWillChange ของ store แต่เครื่องนี้พบว่า
+/// กลไกนั้นหยุดทำงานหลังแอพถูก force-quit แล้ว restore (header/การ์ดค้างที่ค่าเก่า
+/// ทั้งที่ store มีค่าใหม่ — ดูหลักฐานใน log หมวด hero) — Live ใช้ TimelineView
+/// ขับเองทุกวินาที ทำให้ทุก view ที่อ่าน store ภายในได้ค่าสดเสมอ (แบบเดียวกับที่
+/// HeroCard ใช้แล้วได้ผลตลอด 4 ชั่วโมง)
+struct Live<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            content()
+        }
+    }
+}
+
 // MARK: - การ์ด (แทน Panel ของ rich) — สไตล์กระจกหรูหรา
 
 struct Card<Content: View>: View {

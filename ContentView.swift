@@ -4,33 +4,37 @@ struct ContentView: View {
     @ObservedObject var store: WeatherStore
 
     var body: some View {
-        ZStack {
-            Theme.background
-                .ignoresSafeArea()
-            VStack(spacing: 0) {
-                HeaderBar(store: store)
-                // แถบแจ้ง error ของ API (เงียบมาก่อน — ตอนนี้ให้เห็นชัด ๆ พร้อมปุ่มลองใหม่)
-                if !store.errorMessage.isEmpty {
-                    errorBanner
-                }
-                if store.lastUpdated == nil {
-                    // โหลดรอบแรกยังไม่เสร็จ — แสดงสถานะกำลังเชื่อมต่อแทนหน้าว่าง 0°
-                    VStack(spacing: 14) {
-                        ProgressView()
-                            .scaleEffect(1.6)
-                        Text("กำลังเชื่อมต่อสถานีอากาศ...")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.6))
+        // Live: ประเมินใหม่ทุก 1 วิ — ให้ header/การ์ด/banner ทุกส่วนอ่านค่าจาก store
+        // ตรง ๆ เสมอ ไม่ขึ้นกับ objectWillChange อย่างเดียว (ดู comment ใน Live)
+        Live {
+            ZStack {
+                Theme.background
+                    .ignoresSafeArea()
+                VStack(spacing: 0) {
+                    HeaderBar(store: store)
+                    // แถบแจ้ง error ของ API (เงียบมาก่อน — ตอนนี้ให้เห็นชัด ๆ พร้อมปุ่มลองใหม่)
+                    if !store.errorMessage.isEmpty {
+                        errorBanner
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    Group {
-                        switch store.tab {
-                        case .dashboard: DashboardView(store: store)
-                        case .forecast: ForecastView(store: store)
+                    if store.lastUpdated == nil {
+                        // โหลดรอบแรกยังไม่เสร็จ — แสดงสถานะกำลังเชื่อมต่อแทนหน้าว่าง 0°
+                        VStack(spacing: 14) {
+                            ProgressView()
+                                .scaleEffect(1.6)
+                            Text("กำลังเชื่อมต่อสถานีอากาศ...")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.6))
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        Group {
+                            switch store.tab {
+                            case .dashboard: DashboardView(store: store)
+                            case .forecast: ForecastView(store: store)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
