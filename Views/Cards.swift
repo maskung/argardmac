@@ -6,11 +6,20 @@ struct HeroCard: View {
     let store: WeatherStore
 
     var body: some View {
+        // Heartbeat: ให้ทั้งการ์ดถูกประเมินใหม่ทุก 1 วิ — ค่าอุณหภูมิ/ความชื้น/Updated
+        // อ่านจาก store ตรง ๆ ทุก tick จึงไม่มีทางค้างบนจอแม้ notification ของ
+        // ObservableObject จะหลุดไปชั่วคราว (อาการที่เจอกับโปรเซสข้ามคืน)
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            heroContent(now: context.date)
+        }
+    }
+
+    private func heroContent(now: Date) -> some View {
         let m = store.obs.metric
         let feel = WX.feeling(m.heatIndex)
         let emoji = store.forecast.first.map { WX.weatherEmoji($0.weatherIcon) } ?? "🌤️"
 
-        HStack(alignment: .center, spacing: 20) {
+        return HStack(alignment: .center, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("\(store.obs.neighborhood.isEmpty ? store.config.stationID : store.obs.neighborhood) • STATION \(store.config.stationID)")
                     .font(.system(size: 11, weight: .semibold))
@@ -43,13 +52,11 @@ struct HeroCard: View {
             Spacer(minLength: 16)
 
             VStack(alignment: .trailing, spacing: 5) {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(context.date.formatted(.dateTime.hour().minute().second()))
-                        .font(.system(size: 38, weight: .thin, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.92))
-                }
-                Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                Text(now.formatted(.dateTime.hour().minute().second()))
+                    .font(.system(size: 38, weight: .thin, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.92))
+                Text(now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.5))
                 if let updated = store.lastUpdated {

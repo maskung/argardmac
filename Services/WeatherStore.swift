@@ -50,7 +50,7 @@ final class WeatherStore: ObservableObject {
         let errors = [o.1, f.1, a.1].filter { !$0.isEmpty }
         errorMessage = errors.joined(separator: " • ")
         if errors.isEmpty {
-            logger.log("refresh สำเร็จ: obs + forecast(\(self.forecast.count) ชม.) + aqi")
+            logger.log("refresh สำเร็จ: obs ตอน \(self.obs.obsTimeLocal, privacy: .public) + forecast(\(self.forecast.count) ชม.) + aqi")
         } else {
             logger.error("refresh มี error: \(self.errorMessage, privacy: .public)")
         }

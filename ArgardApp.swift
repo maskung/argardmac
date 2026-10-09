@@ -2,7 +2,7 @@ import SwiftUI
 
 /// ข้อมูลเวอร์ชั่นของแอพ (แก้ที่เดียว — อย่าลืมแก้ Info.plist ให้ตรงกันตอน bump)
 enum AppInfo {
-    static let version = "1.1.5"
+    static let version = "1.1.6"
     static let copyright = "Copyright © 2026 Suphanut Thanyaboon (suphanut@gmail.com)"
 }
 
