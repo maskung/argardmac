@@ -21,6 +21,7 @@ final class WeatherStore: ObservableObject {
     private let service: WeatherService
     private var refreshTask: Task<Void, Never>?
     private let logger = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "store")
+    private var refreshCount = 0
 
     init(config: AppConfig = AppConfig.load()) {
         self.config = config
@@ -50,7 +51,16 @@ final class WeatherStore: ObservableObject {
         let errors = [o.1, f.1, a.1].filter { !$0.isEmpty }
         errorMessage = errors.joined(separator: " • ")
         if errors.isEmpty {
-            logger.log("refresh สำเร็จ: obs ตอน \(self.obs.obsTimeLocal, privacy: .public) + forecast(\(self.forecast.count) ชม.) + aqi")
+            // log ค่าจริงที่ได้รับ + เลขกำกับรอบ (กันข้อความซ้ำถูกยุบโดย unified log)
+            refreshCount += 1
+            logger.log("""
+                refresh#\(self.refreshCount) สำเร็จ obs=\(self.obs.obsTimeLocal, privacy: .public) \
+                temp=\(self.obs.metric.temp ?? -999, privacy: .public) \
+                rh=\(self.obs.humidity ?? -999, privacy: .public) \
+                dir=\(self.obs.winddir ?? -999, privacy: .public) \
+                press=\(self.obs.metric.pressure ?? -999, privacy: .public) \
+                uv=\(self.obs.uv ?? -999, privacy: .public)
+                """)
         } else {
             logger.error("refresh มี error: \(self.errorMessage, privacy: .public)")
         }

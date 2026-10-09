@@ -1,9 +1,13 @@
 import SwiftUI
+import os
 
 // MARK: - Hero Card — อุณหภูมิใหญ่สุดอลังการ + นาฬิกา
 
 struct HeroCard: View {
     let store: WeatherStore
+
+    private static let heroLog = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "hero")
+    private static var tickCount = 0
 
     var body: some View {
         // Heartbeat: ให้ทั้งการ์ดถูกประเมินใหม่ทุก 1 วิ — ค่าอุณหภูมิ/ความชื้น/Updated
@@ -15,6 +19,18 @@ struct HeroCard: View {
     }
 
     private func heroContent(now: Date) -> some View {
+        // เครื่องมือวินิจฉัย: log ค่าที่ view อ่านได้จาก store ทุก 10 tick
+        Self.tickCount += 1
+        if Self.tickCount % 10 == 0 {
+            let updated = store.lastUpdated.map { $0.formatted(.dateTime.hour().minute().second()) } ?? "nil"
+            Self.heroLog.log("""
+                tick#\(Self.tickCount, privacy: .public) อ่านได้ \
+                temp=\(store.obs.metric.temp ?? -999, privacy: .public) \
+                rh=\(store.obs.humidity ?? -999, privacy: .public) \
+                updated=\(updated, privacy: .public)
+                """)
+        }
+
         let m = store.obs.metric
         let feel = WX.feeling(m.heatIndex)
         let emoji = store.forecast.first.map { WX.weatherEmoji($0.weatherIcon) } ?? "🌤️"
@@ -60,9 +76,16 @@ struct HeroCard: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.5))
                 if let updated = store.lastUpdated {
-                    Text("Updated \(updated.formatted(.dateTime.hour().minute().second()))")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.4))
+                    HStack(spacing: 4) {
+                        // จุดกะพริบทุกวินาที — พิสูจน์ว่า heartbeat ยัง render จริง
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 5, height: 5)
+                            .opacity(Calendar.current.component(.second, from: now) % 2 == 0 ? 0.9 : 0.15)
+                        Text("Updated \(updated.formatted(.dateTime.hour().minute().second()))")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
                 }
             }
         }
