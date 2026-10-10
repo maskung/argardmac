@@ -37,14 +37,23 @@ struct DashboardView: View {
                             .kerning(1.5)
                             .foregroundStyle(Theme.textGold)
                             .padding(.horizontal, 2)
-                        ScrollView(.horizontal, showsIndicators: true) {
-                            HStack(spacing: 10) {
-                                ForEach(store.forecast.prefix(10), id: \.dt) { hour in
-                                    CompactHourCell(hour: hour)
+                        // เต็มความกว้างหน้าต่างพอดี: นับว่าใส่กี่ชั่วโมงได้จากความกว้างจริง
+                        // แล้วยืดเซลล์ให้ชนขอบขวาพอดี (ปรับตามขนาดหน้าต่างอัตโนมัติ)
+                        GeometryReader { geo in
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                let all = Array(store.forecast)
+                                let spacing: CGFloat = 10
+                                let n = max(1, min(all.count, Int((geo.size.width + spacing) / (92 + spacing))))
+                                let w = max(92, (geo.size.width - spacing * CGFloat(n - 1) - 4) / CGFloat(n))
+                                HStack(spacing: spacing) {
+                                    ForEach(Array(all.prefix(n)), id: \.dt) { hour in
+                                        CompactHourCell(hour: hour, width: w)
+                                    }
                                 }
+                                .padding(2)
                             }
-                            .padding(2)
                         }
+                        .frame(height: 114)
                     }
                     .padding(.top, 4)
                     .padding(.bottom, 12)
@@ -58,6 +67,7 @@ struct DashboardView: View {
 /// เซลล์ย่อยของพยากรณ์รายชั่วโมง (แถบล่างของ Dashboard)
 struct CompactHourCell: View {
     let hour: OWForecastItem
+    var width: CGFloat = 92
 
     var body: some View {
         VStack(spacing: 5) {
@@ -83,7 +93,7 @@ struct CompactHourCell: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 8)
-        .frame(width: 92)
+        .frame(width: width)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)

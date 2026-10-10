@@ -389,7 +389,29 @@ struct WindCompass: View {
     }
 }
 
-// MARK: - หน้าปัดบารอมิเตอร์แบบเข็ม (สเกล 960–1060 hPa)
+// MARK: - หน้าปัดบารอมิเตอร์สปอร์ตดาร์ก (ตามแบบที่ผู้ใช้ชี้)
+// ขอบฟ้าเงาเงา หน้าดำไล่เฉด ขีดขาวรอบวงแบบหน้าปัดนาฬิกา
+// วงโซนสี น้ำเงิน→เขียว→แดง กวาด 270° พร้อมไอคอนสภาพอากาศเรียงตามโซน
+// (พายุ→ฝน→เมฆ→แดดเมฆ→แดด) เข็มขาวใบมีด ช่องล่างเป็นหน้าต่างค่าดิจิทัล
+
+/// เข็มใบมีดขาว — กว้างสุดที่หมุด (กึ่งกลาง frame) เรียวแหลมปลาย หางถ่วงสั้น
+/// (หมุดต้องอยู่กึ่งกลาง frame พอดี rotationEffect จึงหมุนรอบศูนย์หน้าปัด
+/// อย่าขยับด้วย offset ก่อนหมุน ไม่งั้น pivot จะเพี้ยนและมุมเข็มบอกค่าผิด)
+struct SportBaroNeedle: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height
+        let cx = w / 2
+        var p = Path()
+        p.move(to: CGPoint(x: cx, y: 0))                      // ปลายเข็ม
+        p.addLine(to: CGPoint(x: cx + w / 2, y: h * 0.46))     // ขอบขวาเหนือหมุด
+        p.addLine(to: CGPoint(x: cx + w * 0.30, y: h * 0.53))  // บ่าขวาใต้หมุด
+        p.addLine(to: CGPoint(x: cx, y: h * 0.62))            // ปลายหาง (สั้น)
+        p.addLine(to: CGPoint(x: cx - w * 0.30, y: h * 0.53))  // บ่าซ้ายใต้หมุด
+        p.addLine(to: CGPoint(x: cx - w / 2, y: h * 0.46))     // ขอบซ้ายเหนือหมุด
+        p.closeSubpath()
+        return p
+    }
+}
 
 struct BarometerGauge: View {
     let pressure: Double?
@@ -397,97 +419,126 @@ struct BarometerGauge: View {
     private var t: Double { min(max(((pressure ?? minP) - minP) / (maxP - minP), 0), 1) }
     private var needleAngle: Double { -135.0 + 270.0 * t }
 
+    // โซน: ต่ำ <1000 น้ำเงิน (พายุ/ฝน) • 1000–1025 เขียว (เปลี่ยนแปลง) • >1025 แดง (แล้ง/ร้อน)
+    private static let zoneBlue = Color(red: 0.30, green: 0.62, blue: 1.0)
+    private static let zoneGreen = Color(red: 0.20, green: 0.75, blue: 0.35)
+    private static let zoneRed = Color(red: 0.92, green: 0.28, blue: 0.25)
+
     var body: some View {
         ZStack {
-            zones
-            ticks
-            numbers
+            dialFace
+            tickRing
+            zoneBand
+            weatherIcons
             needle
-            Circle().fill(Theme.gold).frame(width: 6, height: 6)
-            value
+            hub
+            readout
         }
-        .frame(width: 100, height: 100)
+        .frame(width: 104, height: 104)
     }
 
-    /// โซนสี: ต่ำ <1000 ฟ้า • ปกติ 1000–1025 เขียว • สูง >1025 ส้ม
-    private var zones: some View {
+    /// หน้าปัดดำไล่เฉด + ขอบฟ้าเงา
+    private var dialFace: some View {
         ZStack {
-            zoneArc(from: 0.0, to: 0.4, color: .cyan)
-            zoneArc(from: 0.4, to: 0.65, color: .green)
-            zoneArc(from: 0.65, to: 1.0, color: .orange)
+            Circle().fill(
+                RadialGradient(colors: [Color(red: 0.30, green: 0.32, blue: 0.36),
+                                        Color(red: 0.07, green: 0.08, blue: 0.10)],
+                               center: .center, startRadius: 2, endRadius: 52))
+            Circle().strokeBorder(
+                LinearGradient(colors: [Color(red: 0.45, green: 0.72, blue: 0.98),
+                                        Color(red: 0.10, green: 0.35, blue: 0.75),
+                                        Color(red: 0.35, green: 0.65, blue: 0.95)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: 5)
+        }
+        .shadow(color: .black.opacity(0.45), radius: 6, y: 3)
+    }
+
+    /// ขีดขาวรอบวงแบบหน้าปัดนาฬิกา — ทุก 6° เป็นขีดเล็ก ทุก 30° เป็นขีดใหญ่
+    private var tickRing: some View {
+        ForEach(0..<60, id: \.self) { i in
+            let major = i % 5 == 0
+            Capsule()
+                .fill(.white.opacity(major ? 0.85 : 0.35))
+                .frame(width: major ? 1.6 : 0.8, height: major ? 5.5 : 3)
+                .offset(y: -42)
+                .rotationEffect(.degrees(Double(i) * 6))
         }
     }
 
-    /// ขีดสเกลทุก 20 hPa (ทุก 40 เป็นขีดใหญ่)
-    private var ticks: some View {
-        ForEach(Array(stride(from: minP, through: maxP, by: 20.0)), id: \.self) { v in
-            tickMark(value: v)
+    /// วงโซนสี 3 ช่วง กวาด 270° (เว้นช่องล่างให้หน้าต่างค่า)
+    private var zoneBand: some View {
+        ZStack {
+            bandSegment(startDeg: -135, spanDeg: 108, color: Self.zoneBlue)
+            bandSegment(startDeg: -27, spanDeg: 67.5, color: Self.zoneGreen)
+            bandSegment(startDeg: 40.5, spanDeg: 94.5, color: Self.zoneRed)
         }
     }
 
-    private func tickMark(value v: Double) -> some View {
-        let angle = -135.0 + 270.0 * ((v - minP) / 100.0)
-        let major = Int(v) % 40 == 0
-        let line = Capsule()
-            .fill(major ? Color.white.opacity(0.55) : Color.white.opacity(0.25))
-            .frame(width: major ? 2 : 1.5, height: major ? 7 : 4)
-            .offset(y: -35)
-        return line.rotationEffect(.degrees(angle))
+    private func bandSegment(startDeg: Double, spanDeg: Double, color: Color) -> some View {
+        Circle()
+            .trim(from: 0, to: spanDeg / 360.0)
+            .stroke(color.opacity(0.92),
+                    style: StrokeStyle(lineWidth: 7, lineCap: .butt))
+            // trim ของ Circle เริ่มที่ 3 นาฬิกา ไม่ใช่ 12 — ต้องลบ 90° ให้ start ตรงมุมจริง
+            // (สูตรเดียวกับ zoneArc ของ HumidityDial: หมุน +135 เพื่อเริ่มที่ -135°)
+            .rotationEffect(.degrees(startDeg - 90))
+            .padding(16.5)
     }
 
-    /// ตัวเลข 980 / 1000 / 1020 / 1040 รอบหน้าปัด
-    private var numbers: some View {
-        ForEach([980.0, 1000.0, 1020.0, 1040.0], id: \.self) { v in
-            dialNumber(value: v)
+    /// ไอคอนสภาพอากาศเรียงตามแนวโซน แทนตัวเลขสเกล
+    private let weatherIconSet: [(symbol: String, angle: Double)] = [
+        ("cloud.bolt.fill", -95),      // พายุ — โซนน้ำเงิน
+        ("cloud.heavyrain.fill", -58), // ฝนตก — โซนน้ำเงิน/เขียว
+        ("cloud.fill", -3),            // เมฆ — โซนเขียว
+        ("cloud.sun.fill", 47),        // แดดเมฆ — เขียว/แดง
+        ("sun.max.fill", 93),          // แดดจัด — โซนแดง
+    ]
+
+    private var weatherIcons: some View {
+        ForEach(Array(weatherIconSet.enumerated()), id: \.offset) { _, icon in
+            let radians = icon.angle * .pi / 180
+            Image(systemName: icon.symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.6), radius: 1.5)
+                .offset(x: sin(radians) * 22.5, y: -cos(radians) * 22.5)
         }
     }
 
-    private func dialNumber(value v: Double) -> some View {
-        let radians = (-135.0 + 270.0 * ((v - minP) / 100.0)) * Double.pi / 180
-        let text = Text("\(Int(v))")
-            .font(.system(size: 7, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(.white.opacity(0.45))
-        return text.offset(x: sin(radians) * 24, y: -cos(radians) * 24)
-    }
-
-    /// เข็ม + หางเข็ม
+    /// เข็มขาวใบมีด หมุนตามค่ากดอากาศ (pivot = หมุดกลางหน้าปัด)
     private var needle: some View {
-        let tail = Capsule()
-            .fill(Color.white.opacity(0.4))
-            .frame(width: 2.5, height: 10)
-            .offset(y: 7)
-        let arm = Capsule()
-            .fill(Theme.gold)
-            .frame(width: 3, height: 26)
-            .offset(y: -9)
-            .shadow(color: .yellow.opacity(0.5), radius: 4)
-        return ZStack { tail; arm }
+        SportBaroNeedle()
+            .fill(LinearGradient(colors: [.white, Color(red: 0.80, green: 0.82, blue: 0.86)],
+                                 startPoint: .top, endPoint: .bottom))
+            .frame(width: 6, height: 68)
             .rotationEffect(.degrees(needleAngle))
+            .shadow(color: .black.opacity(0.45), radius: 2, y: 1.5)
             .animation(.spring(response: 1.1, dampingFraction: 0.65), value: needleAngle)
     }
 
-    /// ค่ากดอากาศกลางหน้าปัด
-    private var value: some View {
+    /// หมุดขาวกลางหน้าปัด
+    private var hub: some View {
+        ZStack {
+            Circle().fill(.white).frame(width: 5.5, height: 5.5)
+            Circle().fill(Color(red: 0.55, green: 0.57, blue: 0.62)).frame(width: 2, height: 2)
+        }
+        .shadow(color: .black.opacity(0.5), radius: 1.5)
+    }
+
+    /// หน้าต่างค่าดิจิทัลช่องล่าง (ตำแหน่ง sub-dial ของแบบอ้างอิง)
+    private var readout: some View {
         VStack(spacing: 0) {
             Text(WX.fmt(pressure, 0))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
                 .monospacedDigit()
+                .foregroundStyle(.white)
             Text("hPa")
                 .font(.system(size: 7, weight: .semibold))
                 .kerning(1)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.55))
         }
-        .offset(y: 17)
-    }
-
-    /// วงโค้งโซนสี (กวาด 270° เว้นช่องล่าง)
-    private func zoneArc(from: Double, to: Double, color: Color) -> some View {
-        Circle()
-            .trim(from: from * 0.75, to: to * 0.75)
-            .stroke(color.opacity(0.35), style: StrokeStyle(lineWidth: 5, lineCap: .butt))
-            .rotationEffect(.degrees(135))
-            .padding(8)
+        .offset(y: 22)
     }
 }
 
