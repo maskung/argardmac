@@ -34,6 +34,7 @@ struct HeroCard: View {
         let m = store.obs.metric
         let feel = WX.feeling(m.heatIndex)
         let emoji = store.forecast.first.map { WX.weatherEmoji($0.weatherIcon) } ?? "🌤️"
+        let moon = MoonInfo.calculate()
 
         return HStack(alignment: .center, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
@@ -63,6 +64,26 @@ struct HeroCard: View {
                 Text(feel.emojiText)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(feel.severity.color)
+            }
+
+            Spacer(minLength: 16)
+
+            // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทยกลางแบนเนอร์ — เติมพื้นที่ว่าง
+            // (Illuminated = สัดส่วนพื้นที่สว่างจริงที่เห็นบนจาน ต่างจาก Phase ที่เป็นตำแหน่งในรอบเดือน)
+            HStack(spacing: 12) {
+                MoonDisc(phase: moon.phase, size: 86)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(moon.phaseName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                    Text(moon.thaiLunarText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.65))
+                    Text("Illuminated " + WX.fmt((1 - cos(2 * .pi * moon.phase)) / 2 * 100, 1, suffix: "%"))
+                        .font(.system(size: 10))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.45))
+                }
             }
 
             Spacer(minLength: 16)
@@ -280,12 +301,9 @@ struct MoonCard: View {
               accent: Theme.moonGrad,
               badge: moon.isWanPhra ? "☸️ วันพระ" : nil) {
             VStack(spacing: 10) {
-                // emoji วางขนานกับชื่อดวงจันทร์ (ประหยัดความสูงการ์ด)
+                // จานจันทร์ครึ่งซีกแบบปฏิทินไทย วาดตาม phase จริง (ละเอียดกว่า emoji 8 แบบ)
                 HStack(spacing: 14) {
-                    Text(moon.emoji)
-                        .font(.system(size: 40))
-                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.8), radius: 16)
-                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.5), radius: 5)
+                    MoonDisc(phase: moon.phase, size: 42)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(moon.phaseName)
                             .font(.system(size: 14, weight: .semibold))

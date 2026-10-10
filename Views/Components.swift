@@ -16,6 +16,68 @@ struct Live<Content: View>: View {
     }
 }
 
+// MARK: - MoonDisc — ดวงจันทร์ครึ่งซีกแบบปฏิทินไทย (ละเอียดต่อเนื่องทุกค่ำ)
+// emoji จันทร์ใน Unicode มีแค่ 8 แบบ ไม่พอทำ 30 ระดับ จึงวาดจานจันทร์เอง:
+// ด้านสว่าง = ครึ่งวงกลมด้านที่ดวงอาทิตย์ส่อง + เส้นแบ่งมืด-สว่าง (เทอร์มิเนเตอร์)
+// เป็นครึ่งวงรีที่กว้างแคบตาม phase จริง — ได้เสี้ยวข้างขึ้น/ข้างแรมตามค่ำ
+
+/// รูปส่วนที่สว่างของดวงจันทร์ (phase 0=New, 0.25=First Quarter, 0.5=Full, 0.75=Last Quarter)
+struct MoonLitShape: Shape {
+    let phase: Double
+
+    func path(in rect: CGRect) -> Path {
+        let κ: CGFloat = 0.5523                    // ค่าคงที่สำหรับประมาณ arc ด้วย cubic Bézier
+        let r = min(rect.width, rect.height) / 2
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let T = CGPoint(x: c.x, y: c.y - r)        // ขั้วบน
+        let B = CGPoint(x: c.x, y: c.y + r)        // ขั้วล่าง
+
+        let waxing = phase < 0.5                   // ข้างขึ้น: สว่างด้านขวา / ข้างแรม: ด้านซ้าย
+        let dir: CGFloat = waxing ? 1 : -1
+        let cosx = cos(2 * .pi * phase)            // + = เสี้ยว (crescent), - = เกือบเต็ม (gibbous)
+        let rx = r * CGFloat(abs(cosx))            // ครึ่งความกว้างของเทอร์มิเนเตอร์
+        let bulge: CGFloat = cosx >= 0 ? dir : -dir
+
+        var p = Path()
+        // ขอบนอกด้านสว่าง: ครึ่งวงกลม บน → จุดขอบ → ล่าง
+        let E = CGPoint(x: c.x + dir * r, y: c.y)
+        p.move(to: T)
+        p.addCurve(to: E, control1: CGPoint(x: c.x + dir * κ * r, y: T.y),
+                          control2: CGPoint(x: E.x, y: c.y - κ * r))
+        p.addCurve(to: B, control1: CGPoint(x: E.x, y: c.y + κ * r),
+                          control2: CGPoint(x: c.x + dir * κ * r, y: B.y))
+        // เทอร์มิเนเตอร์: ครึ่งวงรี ล่าง → กลาง → บน
+        let M = CGPoint(x: c.x + bulge * rx, y: c.y)
+        p.addCurve(to: M, control1: CGPoint(x: c.x + bulge * κ * rx, y: B.y),
+                          control2: CGPoint(x: M.x, y: c.y + κ * r))
+        p.addCurve(to: T, control1: CGPoint(x: M.x, y: c.y - κ * r),
+                          control2: CGPoint(x: c.x + bulge * κ * rx, y: T.y))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// จานจันทร์เต็ม — ด้านมืด + ด้านสว่าง พร้อมเรืองแสงม่วงแบบการ์ดเดิม
+struct MoonDisc: View {
+    let phase: Double
+    var size: CGFloat = 42
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color(red: 0.13, green: 0.14, blue: 0.22))
+                .overlay(Circle().strokeBorder(.white.opacity(0.10)))
+            MoonLitShape(phase: phase)
+                .fill(LinearGradient(
+                    colors: [.white, Color(red: 0.93, green: 0.92, blue: 0.80)],
+                    startPoint: .top, endPoint: .bottom))
+        }
+        .frame(width: size, height: size)
+        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.8), radius: 16)
+        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.5), radius: 5)
+    }
+}
+
 // MARK: - การ์ด (แทน Panel ของ rich) — สไตล์กระจกหรูหรา
 
 struct Card<Content: View>: View {
