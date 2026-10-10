@@ -14,6 +14,10 @@ struct MoonInfo {
     let daysUntilNew: Double
     let nextNewMoon: Date
 
+    /// สัดส่วนพื้นที่สว่างจริงบนจาน (0–100%) — ต่างจาก phase ที่เป็นตำแหน่งในรอบเดือน
+    /// (เช่น แรม 14 ค่ำ phase ~95% ของรอบ แต่จานสว่างจริงแค่ ~2%)
+    var illuminationPct: Double { (1 - cos(2 * .pi * phase)) / 2 * 100 }
+
     static let synodicMonth = 29.53058867
 
     static func calculate(for date: Date = Date()) -> MoonInfo {

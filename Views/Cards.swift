@@ -68,23 +68,9 @@ struct HeroCard: View {
 
             Spacer(minLength: 16)
 
-            // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทยกลางแบนเนอร์ — เติมพื้นที่ว่าง
-            // (Illuminated = สัดส่วนพื้นที่สว่างจริงที่เห็นบนจาน ต่างจาก Phase ที่เป็นตำแหน่งในรอบเดือน)
-            HStack(spacing: 12) {
-                MoonDisc(phase: moon.phase, size: 86)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(moon.phaseName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                    Text(moon.thaiLunarText)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.65))
-                    Text("Illuminated " + WX.fmt((1 - cos(2 * .pi * moon.phase)) / 2 * 100, 1, suffix: "%"))
-                        .font(.system(size: 10))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-            }
+            // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทยกลางแบนเนอร์
+            // (รายละเอียดเฟส/ค่ำ/Illuminated อยู่ในการ์ด Moon Phase แล้ว)
+            MoonDisc(phase: moon.phase, size: 86)
 
             Spacer(minLength: 16)
 
@@ -321,6 +307,7 @@ struct MoonCard: View {
                 }
                 Divider().overlay(.white.opacity(0.12))
                 InfoRow("📊 Phase", WX.fmt(moon.phase * 100, 1, suffix: "%"))
+                InfoRow("💡 Illuminated", WX.fmt(moon.illuminationPct, 1, suffix: "%"))
                 if moon.daysSinceNew < 3 {
                     InfoRow("🌑 Since new", WX.fmt(moon.daysSinceNew, 0, suffix: " days"))
                 } else {
