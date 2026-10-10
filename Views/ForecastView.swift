@@ -2,10 +2,17 @@ import SwiftUI
 
 /// หน้าพยากรณ์ 12 ชั่วโมงข้างหน้า (แทนโหมดกด Enter ใน Python เดิม)
 struct ForecastView: View {
-    let store: WeatherStore
+    // เช่นเดียวกับ DashboardView — กันค่าค้างสองชั้น
+    @ObservedObject var store: WeatherStore
     private let columns = [GridItem(.adaptive(minimum: 240), spacing: 14)]
 
     var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            forecastContent
+        }
+    }
+
+    private var forecastContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("HOURLY FORECAST • NEXT 12 HOURS")

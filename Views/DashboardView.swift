@@ -2,10 +2,19 @@ import SwiftUI
 
 /// หน้า Dashboard — Hero + การ์ด 8 ใบ + แถบพยากรณ์รายชั่วโมง
 struct DashboardView: View {
-    let store: WeatherStore
+    // สองชั้นกันค่าค้าง (บทเรียนจากหลายเซสชัน): @ObservedObject ทำให้ได้ค่าใหม่
+    // ทันทีที่ store.refresh() สำเร็จ และ TimelineView หัวใจของตัวเอง (แบบ HeroCard)
+    // ขับใหม่ทุกวินาที แม้ Live ภายนอกหรือ objectWillChange จะหยุดชะงัก
+    @ObservedObject var store: WeatherStore
     private let columns = [GridItem(.adaptive(minimum: 300), spacing: 14)]
 
     var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            dashboardContent
+        }
+    }
+
+    private var dashboardContent: some View {
         ScrollView {
             VStack(spacing: 14) {
                 HeroCard(store: store)
