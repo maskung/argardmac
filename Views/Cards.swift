@@ -59,7 +59,7 @@ struct HeroCard: View {
                              color: feel.severity.color)
                     HeroChip(icon: "drop.fill", text: WX.fmtInt(store.obs.humidity, suffix: "%"))
                     HeroChip(icon: "wind",
-                             text: "\(WX.degToArrow(store.obs.winddir)) \(WX.fmt(WX.msToKmh(m.windSpeed), 0)) km/h")
+                             text: "\(WX.degToArrow(store.obs.winddir)) \(WX.fmt(m.windSpeed, 0)) km/h")
                 }
                 Text(feel.emojiText)
                     .font(.system(size: 13, weight: .semibold))
@@ -144,8 +144,9 @@ struct WindCard: View {
 
     var body: some View {
         let m = obs.metric
-        let speed = WX.msToKmh(m.windSpeed)
-        let gust = WX.msToKmh(m.windGust)
+        // API (units=m) ส่งมาเป็น km/h แล้ว — ใช้ตรง ๆ อย่าแปลงซ้ำ (เคยคูณ 3.6 ทำให้ค่าเยิน 3.6 เท่า)
+        let speed = m.windSpeed
+        let gust = m.windGust
         let desc = WX.wind(speed)
         Card(title: "Wind • Gust", systemIcon: "wind",
              accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h")) {

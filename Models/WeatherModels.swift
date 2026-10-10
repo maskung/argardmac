@@ -23,6 +23,7 @@ struct PWSObservationResponse: Decodable {
 struct PWSObservation: Decodable {
     var stationID = ""
     var obsTimeLocal = ""
+    var obsTimeUtc: Date?        // เวลาจริงของการวัด (UTC) — ใช้เทียบอายุข้อมูลใน header
     var neighborhood = ""
     var lat: Double?
     var lon: Double?
@@ -33,8 +34,23 @@ struct PWSObservation: Decodable {
     var metric = PWSMetric()
 
     enum CodingKeys: String, CodingKey {
-        case stationID, obsTimeLocal, neighborhood, lat, lon, winddir
+        case stationID, obsTimeLocal, obsTimeUtc, neighborhood, lat, lon, winddir
         case uv, solarRadiation, humidity, metric
+    }
+
+    /// แปลง "2026-10-10T04:53:07Z" → Date (สำรอง: obsTimeLocal รูปแบบไทย GMT+7)
+    private static let iso = ISO8601DateFormatter()
+    private static let localFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "Asia/Bangkok")
+        return f
+    }()
+    static func parseUTC(_ s: String?) -> Date? {
+        guard let s, !s.isEmpty else { return nil }
+        if let d = iso.date(from: s) { return d }
+        if let d = iso.date(from: s + "Z") { return d }
+        return localFmt.date(from: s)
     }
 
     init() {}
@@ -43,6 +59,7 @@ struct PWSObservation: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         stationID = (try? c.decodeIfPresent(String.self, forKey: .stationID)) ?? ""
         obsTimeLocal = (try? c.decodeIfPresent(String.self, forKey: .obsTimeLocal)) ?? ""
+        obsTimeUtc = PWSObservation.parseUTC(try? c.decodeIfPresent(String.self, forKey: .obsTimeUtc))
         neighborhood = (try? c.decodeIfPresent(String.self, forKey: .neighborhood)) ?? ""
         lat = c.flexibleDouble(.lat)
         lon = c.flexibleDouble(.lon)
@@ -59,8 +76,8 @@ struct PWSMetric: Decodable {
     var heatIndex: Double?
     var dewpt: Double?
     var windChill: Double?
-    var windSpeed: Double?      // m/s
-    var windGust: Double?       // m/s
+    var windSpeed: Double?      // km/h (API units=m ส่งมาเป็น km/h แล้ว)
+    var windGust: Double?       // km/h
     var precipRate: Double?     // mm/h
     var precipTotal: Double?    // mm
     var pressure: Double?       // hPa

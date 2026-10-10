@@ -25,9 +25,14 @@ struct HeaderBar: View {
                         .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
                 }
                 if !store.obs.obsTimeLocal.isEmpty {
-                    Text("Station \(store.config.stationID) • Obs \(store.obs.obsTimeLocal)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.5))
+                    // "Cloud" แทน "Obs" — ชี้ว่าเป็นข้อมูลจากคลาวด์ weather.com ซึ่งบางทีแคชชุดเดิมไว้ ไม่ใช่เรียลไทม์เสมอ
+                    // พร้อม pill บอกอายุข้อมูลเทียบเวลาปัจจุบัน (เขียว=สด เหลือง=หลังแล้วนิดหน่อย แดง=ล้าหลังมาก)
+                    HStack(spacing: 6) {
+                        Text("Station \(store.config.stationID) • Cloud \(store.obs.obsTimeLocal)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.5))
+                        CloudStatusPill(obsTime: store.obs.obsTimeUtc)
+                    }
                 }
             }
 
@@ -73,6 +78,36 @@ struct HeaderBar: View {
         .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+        }
+    }
+}
+
+
+/// Pill สถานะความสดของข้อมูลคลาวด์ — เทียบเวลา obs กับตอนนี้
+/// ขับด้วย TimelineView ของตัวเอง อายุจะวิ่งสดทุกวินาทีแม้ header ไม่ render ใหม่
+struct CloudStatusPill: View {
+    let obsTime: Date?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let age = obsTime.map { context.date.timeIntervalSince($0) } ?? -1
+            let color: Color = age < 0 ? .gray : (age <= 180 ? .green : (age <= 600 ? .yellow : .red))
+            let text: String = {
+                if age < 0 { return "—" }
+                if age <= 180 { return "LIVE" }
+                return "+\(Int(age / 60)) min"
+            }()
+            HStack(spacing: 4) {
+                Circle().fill(color).frame(width: 5, height: 5)
+                Text(text)
+                    .font(.system(size: 10, weight: .bold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(color.opacity(0.35)))
         }
     }
 }
