@@ -43,16 +43,11 @@ struct HeroCard: View {
                     .kerning(1.5)
                     .foregroundStyle(Theme.textGold)
 
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text(WX.fmtInt(m.temp) + "°")
-                        .font(.system(size: 88, weight: .ultraLight, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.textGold)
-                        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
-                    Text(emoji)
-                        .font(.system(size: 42))
-                        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
-                }
+                Text(WX.fmtInt(m.temp) + "°")
+                    .font(.system(size: 88, weight: .ultraLight, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textGold)
+                    .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
 
                 HStack(spacing: 8) {
                     HeroChip(icon: "sparkles", text: "Feels \(WX.fmtInt(m.heatIndex))°C",
@@ -68,11 +63,17 @@ struct HeroCard: View {
 
             Spacer(minLength: 16)
 
-            // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทยกลางแบนเนอร์
-            // (รายละเอียดเฟส/ค่ำ/Illuminated อยู่ในการ์ด Moon Phase แล้ว)
-            MoonDisc(phase: moon.phase, size: 86)
+            // ไอคอนสภาพอากาศใหญ่กลางแบนเนอร์ — ย้ายมาจากข้าง ๆ อุณหภูมิ
+            // เริ่ม 86 → 172 (ใหญ่ไป) → 138 → ลดอีก 20% เหลือ 110 (ผู้ใช้ขอ)
+            Text(emoji)
+                .font(.system(size: 110))
+                .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
 
             Spacer(minLength: 16)
+
+            // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทย ย้ายมาข้างนาฬิกา
+            // (รายละเอียดเฟส/ค่ำ/Illuminated อยู่ในการ์ด Moon Phase แล้ว)
+            MoonDisc(phase: moon.phase, size: 86)
 
             VStack(alignment: .trailing, spacing: 5) {
                 Text(now.formatted(.dateTime.hour().minute().second()))
