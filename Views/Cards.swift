@@ -206,8 +206,7 @@ struct SolarUVCard: View {
         Card(title: "Solar • UV", systemIcon: "sun.max",
              accent: Theme.solar, badge: "UV \(WX.fmtInt(obs.uv))") {
             HStack(spacing: 16) {
-                UVGauge(uv: obs.uv)
-                    .frame(width: 84, height: 84)
+                UVSemiGauge(uv: obs.uv)
                 VStack(alignment: .leading, spacing: 6) {
                     InfoRow("😎 UV Level", uvDesc.emojiText, valueColor: uvDesc.severity.color)
                     InfoRow("⚡ Solar Rad.", WX.fmt(obs.solarRadiation, 0, suffix: " W/m²"))

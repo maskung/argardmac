@@ -289,36 +289,102 @@ struct HumidityDial: View {
     }
 }
 
-// MARK: - วงกลม gauge รอบค่า UV (สเกล 0–12)
+// MARK: - เกจ UV แบบครึ่งวงโค้ง (ตามแบบที่ผู้ใช้ชี้)
+// ครึ่งวง 180° ซ้าย(ต่ำ)→ขวา(สูง) แบ่ง 11 ช่องสี คั่นช่องไฟ:
+// เขียว 0–2 / เหลือง 3–5 / ส้ม 6–7 / แดง 8–10 / ม่วง 11 (นับจากซ้าย)
+// UV ยิ่งมาก เข็มยิ่งกระดิกไปทางขวา (ทิศมาตรฐานตามภาพอ้างอิง — เคยสลับกลับด้าน
+// ช่วงสั้นๆ เพราะห่วงวงกลมปลายเข็มตอนนั้นดูเหมือนจุดหมุนจนสับสน พอเอาห่วงออก
+// ผู้ใช้ยืนยันทิศเดิม: มากขึ้น = ขวา)
+// เข็มขาวแหลมยาวถึงแถบสี หมุนรอบหมุดกลาง (เคยมีห่วงวงกลมปลายเข็มและป้ายชื่อโซน
+// รอบนอก — ผู้ใช้ขอเอาออกทั้งคู่)
+// (เฟรมสี่เหลี่ยมจตุรัส หมุด/pivot อยู่กึ่งกลางพอดี — เข็มและห่วงใช้รูปแบบ
+//  offset แล้ว rotationEffect เหมือนขีดสเกล เพื่อไม่ให้ pivot เพี้ยน)
 
-struct UVGauge: View {
+struct UVSemiGauge: View {
     let uv: Double?
-    private var ratio: CGFloat { CGFloat(min(max((uv ?? 0) / 12.0, 0), 1)) }
+    private var v: Double { min(max(uv ?? 0, 0), 11) }
+    // ค่าจำนวนเต็ม v ต้องตก "กลางช่องสี" ของช่องที่ v (ช่องที่ 1..11 นับจากเขียว)
+    // จึงเลื่อนครึ่งช่อง: ใช้ (v-0.5)/11 แทน v/11 — ค่า 0 ชี้ปลายซ้ายสุด, ค่า 9 กลางช่องแดง
+    // ช่องสุดท้าย (11) กลางช่องม่วงปลายขวา ค่าทศนิยมไหลต่อเนื่องระหว่างกลางช่อง
+    private var needleAngle: Double {
+        -90.0 + min(max((v - 0.5) / 11.0, 0), 1) * 180.0
+    }
+
+    // สีโซนตามแบบอ้างอิง (#A3C43C / #F6E32D / #F7A31C / #ED3B25 / #A955CE)
+    private static let zoneGreen = Color(red: 0.64, green: 0.77, blue: 0.24)
+    private static let zoneYellow = Color(red: 0.96, green: 0.89, blue: 0.18)
+    private static let zoneOrange = Color(red: 0.97, green: 0.64, blue: 0.11)
+    private static let zoneRed = Color(red: 0.93, green: 0.23, blue: 0.15)
+    private static let zonePurple = Color(red: 0.66, green: 0.33, blue: 0.81)
 
     var body: some View {
-        let color = WX.uv(uv).severity.color
         ZStack {
-            Circle().stroke(.white.opacity(0.12), lineWidth: 7)
-            Circle()
-                .trim(from: 0, to: ratio)
-                .stroke(
-                    LinearGradient(colors: [color.opacity(0.6), color],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .shadow(color: color.opacity(0.6), radius: 6)
-            VStack(spacing: 0) {
-                Text(WX.fmtInt(uv))
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(color)
-                Text("UV")
-                    .font(.system(size: 9, weight: .semibold))
-                    .kerning(1.5)
-                    .foregroundStyle(.white.opacity(0.5))
-            }
+            segments
+            needle
+            hub
+            readout
         }
-        .animation(.easeInOut(duration: 0.7), value: ratio)
+        .frame(width: 128, height: 128)
+    }
+
+    /// ครึ่งวงบน 11 ช่อง — trim 0.5=9 นาฬิกา → 1.0=3 นาฬิกา (ค่าเพิ่มตามเข็ม)
+    private var segments: some View {
+        ForEach(0..<11, id: \.self) { i in
+            let gap = 0.006   // ~2° ช่องไฟระหว่างช่อง (แบ่งครึ่งหัว-ท้ายให้สมมาตร)
+            Circle()
+                .trim(from: 0.5 + Double(i) / 22.0 + gap / 2,
+                      to: 0.5 + Double(i + 1) / 22.0 - gap / 2)
+                .stroke(segColor(i),
+                        style: StrokeStyle(lineWidth: 9, lineCap: .butt))
+        }
+    }
+
+    /// สีช่องที่ i (i=0 ปลายซ้าย … i=10 ปลายขวา) — เขียวซ้าย → ม่วงขวา
+    private func segColor(_ i: Int) -> Color {
+        switch i {
+        case ...1: Self.zoneGreen
+        case ...3: Self.zoneYellow
+        case ...5: Self.zoneOrange
+        case ...8: Self.zoneRed
+        default: Self.zonePurple
+        }
+    }
+
+    /// เข็มขาวเรียวแหลม ปลายทับแถบสี (70pt — ปลายเรียว 10pt สุดท้ายจางเกินตามเห็น
+    // เลยต้องยาวพ้นรัศมีแถบ ส่วนที่มองเห็นจึงจรดแถบสีพอดี)
+    // ผู้ใช้ขอเอาห่วงวงกลมปลายเข็มออก: ห่วงดูเหมือน "จุดหมุน" จนเข็มดูสลับด้าน
+    // ตอนนี้เหลือแต่เข็มแหลมๆ หมุนรอบหมุดกลางตัวจริง
+    private var needle: some View {
+        SportBaroNeedle()
+            .fill(.white)
+            .shadow(color: .white.opacity(0.55), radius: 2)
+            .frame(width: 5, height: 140)
+            .rotationEffect(.degrees(needleAngle))
+            .animation(.spring(response: 1.0, dampingFraction: 0.7), value: needleAngle)
+    }
+
+    /// หมุดกลางฐาน
+    private var hub: some View {
+        ZStack {
+            Circle().fill(.white).frame(width: 6, height: 6)
+            Circle().fill(Color(red: 0.55, green: 0.57, blue: 0.62)).frame(width: 2.2, height: 2.2)
+        }
+        .shadow(color: .black.opacity(0.5), radius: 1.5)
+    }
+
+    /// ค่า UV ตัวเลขใต้หมุด (ในพื้นที่ใต้ครึ่งวง)
+    private var readout: some View {
+        VStack(spacing: 1) {
+            Text(WX.fmtInt(uv))
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+            Text("UV INDEX")
+                .font(.system(size: 6, weight: .semibold))
+                .kerning(1)
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .offset(y: 40)
     }
 }
 
