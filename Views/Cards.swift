@@ -77,13 +77,13 @@ struct HeroCard: View {
 
             // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทย ย้ายมาข้างนาฬิกา
             // พร้อมค่ำจันทร์ใต้จาน (เหลืองเมื่อเป็นวันพระ ตามสไตล์การ์ด Moon Phase)
-            // เว้น 26 กันชนเรืองแสงม่วง + ข้อความเอนขวานิดให้พ้นเงาจาน (ผู้ใช้ขอ)
+            // ข้อความจัดกึ่งกลางแนวดิ่งของจานพอดี (ผู้ใช้ขอ: ใช้ดวงจันทร์เป็น center)
+            // เว้น 26 กันชนเรืองแสงม่วงรัศมี 16 ของจาน
             VStack(spacing: 26) {
                 MoonDisc(phase: moon.phase, size: 86)
                 Text(moon.thaiLunarText)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.85))
-                    .offset(x: 14)
             }
 
             VStack(alignment: .trailing, spacing: 5) {

@@ -6,7 +6,7 @@ struct MoonInfo {
     let emoji: String
     let phaseName: String
     let phase: Double            // 0.0–1.0
-    let thaiLunarText: String    // "ขึ้น 12 ค่ำ" / "แรม 8 ค่ำ"
+    let thaiLunarText: String    // "ขึ้น 12 ค่ำ เดือน 11" / "แรม 8 ค่ำ เดือน 12"
     let isWanPhra: Bool
     let isNewMoon: Bool
     let isFullMoon: Bool
@@ -43,11 +43,12 @@ struct MoonInfo {
         }
 
         let (thaiText, isWanPhra) = thaiLunar(phase: phase)
+        let thaiTextWithMonth = "\(thaiText) เดือน \(thaiLunarMonth(date: date, refDate: refDate))"
         let sinceNew = phase * synodicMonth
         let untilNew = synodicMonth - sinceNew
         return MoonInfo(
             emoji: emoji, phaseName: name, phase: phase,
-            thaiLunarText: thaiText, isWanPhra: isWanPhra,
+            thaiLunarText: thaiTextWithMonth, isWanPhra: isWanPhra,
             isNewMoon: isNew, isFullMoon: isFull,
             daysSinceNew: sinceNew, daysUntilNew: untilNew,
             nextNewMoon: date.addingTimeInterval(untilNew * 86400)
@@ -64,6 +65,25 @@ struct MoonInfo {
             let day = Int(daysOld - 14.7653) + 1
             return ("แรม \(day) ค่ำ", day == 8 || day == 15)
         }
+    }
+
+    /// เดือนทางจันทรคติไทย (1–12) — อิงกฎสงกรานต์ 13–15 เม.ย. ต้องตกใน "เดือน 5"
+    /// นับจำนวน lunation ตั้งแต่ new moon ที่เปิดเดือนจันทร์ซึ่งครอบ 15 เม.ย. ล่าสุด
+    /// ถึง lunation ปัจจุบัน แล้ววน mod 12 จากเดือน 5
+    /// (ไม่กรองอธิกมาส "เดือน 8 หลัก" — ปีที่มี ค่าจะเพี้ยน 1 เดือนช่วงหลังกรกฎาคม
+    ///  ถึงสงกรานต์ถัดไป สำหรับงานแสดงผลพยากรณ์อากาศถือว่าใช้ได้)
+    static func thaiLunarMonth(date: Date, refDate: Date) -> Int {
+        let daysPassed = date.timeIntervalSince(refDate) / 86400
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let y = cal.component(.year, from: date)
+        let m = cal.component(.month, from: date)
+        let year = m >= 4 ? y : y - 1          // ยังไม่ถึงเม.ย. = อิงสงกรานต์ปีก่อน
+        let apr15 = cal.date(from: DateComponents(year: year, month: 4, day: 15)) ?? date
+        let aprDays = apr15.timeIntervalSince(refDate) / 86400
+        let lunationsBetween = Int((daysPassed / synodicMonth).rounded(.down))
+            - Int((aprDays / synodicMonth).rounded(.down))
+        return ((5 - 1 + lunationsBetween) % 12 + 12) % 12 + 1
     }
 
     /// วันที่แบบไทยพร้อมปี พ.ศ. เช่น "21 ต.ค. 2569"
