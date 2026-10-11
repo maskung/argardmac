@@ -55,6 +55,10 @@ struct HeroCard: View {
                     HeroChip(icon: "drop.fill", text: WX.fmtInt(store.obs.humidity, suffix: "%"))
                     HeroChip(icon: "wind",
                              text: "\(WX.degToArrow(store.obs.winddir)) \(WX.fmt(m.windSpeed, 0)) km/h")
+                    // ป้ายวันพระตามปฏิทินจันทรคติไทย — ขึ้นเฉพาะวันที่เป็นวันพระจริงเท่านั้น
+                    if moon.isWanPhra {
+                        HeroChip(icon: "circle.grid.cross.fill", text: "วันนี้วันพระ", color: .yellow)
+                    }
                 }
                 Text(feel.emojiText)
                     .font(.system(size: 13, weight: .semibold))
@@ -72,8 +76,15 @@ struct HeroCard: View {
             Spacer(minLength: 16)
 
             // ดวงจันทร์ครึ่งซีกแบบปฏิทินไทย ย้ายมาข้างนาฬิกา
-            // (รายละเอียดเฟส/ค่ำ/Illuminated อยู่ในการ์ด Moon Phase แล้ว)
-            MoonDisc(phase: moon.phase, size: 86)
+            // พร้อมค่ำจันทร์ใต้จาน (เหลืองเมื่อเป็นวันพระ ตามสไตล์การ์ด Moon Phase)
+            // เว้น 26 กันชนเรืองแสงม่วง + ข้อความเอนขวานิดให้พ้นเงาจาน (ผู้ใช้ขอ)
+            VStack(spacing: 26) {
+                MoonDisc(phase: moon.phase, size: 86)
+                Text(moon.thaiLunarText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(moon.isWanPhra ? .yellow : .white.opacity(0.85))
+                    .offset(x: 14)
+            }
 
             VStack(alignment: .trailing, spacing: 5) {
                 Text(now.formatted(.dateTime.hour().minute().second()))
