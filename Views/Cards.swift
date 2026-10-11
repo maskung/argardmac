@@ -169,7 +169,7 @@ struct WindCard: View {
         Card(title: "Wind • Gust", systemIcon: "wind",
              accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h")) {
             HStack(spacing: 16) {
-                WindCompass(degrees: obs.winddir)
+                WindGauge(speed: speed, gust: gust, degrees: obs.winddir)
                 VStack(alignment: .leading, spacing: 6) {
                     InfoRow("🧭 Direction",
                             "\(WX.degToArrow(obs.winddir)) \(WX.fmtInt(obs.winddir))° \(WX.degToCompass(obs.winddir))")

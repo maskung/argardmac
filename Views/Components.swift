@@ -322,70 +322,77 @@ struct UVGauge: View {
     }
 }
 
-// MARK: - เข็มทิศลม — เข็มหมุนตามทิศทางลมจริง
+// MARK: - เกจลมสไตล์การ์ดพยากรณ์โมเดิร์น (ตามแบบที่ผู้ใช้ชี้)
+// วงกลมเต็มวง + วงแหวนทองบาง + ขีดรอบวง 60 เส้นสม่ำเสมอทุก 6°
+// ไม่มีเข็ม — ใช้หัวลูกศรดำบนวงแหวนชี้เข้าศูนย์กลาง หมุนตามทิศลม
+// กลางวงเป็นตัวเลขความเร็วลมดิจิทัล + ค่า gust สีฟ้า
 
-struct CompassNeedle: Shape {
+/// หัวลูกศรบนวงแหวน — ปลายแหลมชี้เข้าหาศูนย์กลาง หลังเว้าเล็กน้อย
+/// (วางที่ตำแหน่ง 12 นาฬิกาก่อน แล้วหมุนด้วย rotationEffect ตามทิศลม)
+struct WindRimArrow: Shape {
     func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height
+        let cx = w / 2
         var p = Path()
-        p.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        p.move(to: CGPoint(x: cx, y: h))              // ปลายแหลมชี้เข้าใน
+        p.addLine(to: CGPoint(x: w, y: 0))            // ปีกขวาหลัง
+        p.addLine(to: CGPoint(x: cx, y: h * 0.32))    // รอยเว้ากลางหลัง
+        p.addLine(to: CGPoint(x: 0, y: 0))            // ปีกซ้ายหลัง
         p.closeSubpath()
         return p
     }
 }
 
-struct WindCompass: View {
+struct WindGauge: View {
+    let speed: Double?
+    let gust: Double?
     let degrees: Double?
-    private var deg: Double { degrees ?? 0 }
+    private static let accent = Color(red: 0.16, green: 0.66, blue: 0.88)
 
     var body: some View {
         ZStack {
-            // หน้าปัด
-            Circle().stroke(.white.opacity(0.14), lineWidth: 1.5)
-            // ขีดสเกลทุก 45° (หลักใหญ่ = ทิศหลัก)
-            ForEach(0..<8, id: \.self) { i in
+            // วงแหวนขาวนีออนเรืองแสงรอบวง (เดิมทอง — ผู้ใช้ขอเปลี่ยน)
+            Circle().strokeBorder(.white, lineWidth: 2.5)
+                .shadow(color: .white.opacity(0.65), radius: 3)
+            // ขีดรอบวง 60 เส้น ทุก 6° — สม่ำเสมอ ไม่มีลำดับหลัก-รองตามแบบ
+            ForEach(0..<60, id: \.self) { i in
                 Capsule()
-                    .fill(i % 2 == 0 ? Color.white.opacity(0.45) : Color.white.opacity(0.2))
-                    .frame(width: i % 2 == 0 ? 2 : 1.5,
-                           height: i % 2 == 0 ? 8 : 5)
-                    .offset(y: -43)
-                    .rotationEffect(.degrees(Double(i) * 45))
+                    .fill(.white.opacity(0.30))
+                    .frame(width: 1.2, height: 5)
+                    .offset(y: -45)
+                    .rotationEffect(.degrees(Double(i) * 6))
             }
-            // ทิศหลัก N E S W
-            Text("N").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textGold)
-                .offset(y: -32)
-            Group {
-                Text("E").offset(x: 32)
-                Text("S").offset(y: 32)
-                Text("W").offset(x: -32)
-            }
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.white.opacity(0.5))
-
-            // เข็ม + ทิศย่อ
-            VStack(spacing: 3) {
-                ZStack {
-                    // หางเข็ม
-                    Capsule()
-                        .fill(.white.opacity(0.45))
-                        .frame(width: 2.5, height: 14)
-                        .offset(y: 15)
-                    // หัวเข็ม
-                    CompassNeedle()
-                        .fill(Theme.breeze)
-                        .frame(width: 20, height: 24)
-                        .shadow(color: .teal.opacity(0.6), radius: 4)
+            // หัวลูกศรขาวนีออนบนวงแหวน หมุนตามองศาที่ลมพัดมา (FROM bearing)
+            WindRimArrow()
+                .fill(.white)
+                .shadow(color: .white.opacity(0.9), radius: 3.5)
+                .frame(width: 10, height: 13)
+                .offset(y: -49)
+                .rotationEffect(.degrees(degrees ?? 0))
+                .animation(.spring(response: 0.9, dampingFraction: 0.7), value: degrees)
+            // ตัวเลขกลางวง — ความเร็วลม + หน่วย + gust
+            VStack(spacing: 1) {
+                Text(WX.fmt(speed, 0))
+                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                Text("km/h")
+                    .font(.system(size: 8, weight: .semibold))
+                    .kerning(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                HStack(spacing: 3) {
+                    Text("Gust")
+                        .font(.system(size: 7, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(WX.fmt(gust, 0))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Self.accent)
                 }
-                .rotationEffect(.degrees(deg))
-                .animation(.spring(response: 0.9, dampingFraction: 0.65), value: deg)
-
-                Text(WX.degToCompass(deg))
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Theme.textGold)
+                .padding(.top, 2)
             }
         }
-        .frame(width: 100, height: 100)
+        .frame(width: 110, height: 110)
     }
 }
 
