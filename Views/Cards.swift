@@ -55,6 +55,12 @@ struct HeroCard: View {
                     HeroChip(icon: "drop.fill", text: WX.fmtInt(store.obs.humidity, suffix: "%"))
                     HeroChip(icon: "wind",
                              text: "\(WX.degToArrow(store.obs.winddir)) \(WX.fmt(m.windSpeed, 0)) km/h")
+                    // อัตราฝนตก — ขึ้นเฉพาะตอนฝนตกจริง (rate > 0) พอหยุดฝนชิปหายเอง
+                    if let rate = m.precipRate, rate > 0 {
+                        HeroChip(icon: "cloud.rain.fill",
+                                 text: WX.fmt(rate, 2, suffix: " mm/h"),
+                                 color: Color(red: 0.302, green: 0.671, blue: 0.969))
+                    }
                     // ป้ายวันพระตามปฏิทินจันทรคติไทย — ขึ้นเฉพาะวันที่เป็นวันพระจริงเท่านั้น
                     if moon.isWanPhra {
                         HeroChip(icon: "circle.grid.cross.fill", text: "วันนี้วันพระ", color: .yellow)
