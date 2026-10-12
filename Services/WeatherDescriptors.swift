@@ -62,18 +62,42 @@ enum WX {
         }
     }
 
-    // ลม (km/h)
+    // ลมตามมาตรา Beaufort (WMO) 0–12
+    struct Beaufort {
+        let force: Int
+        let name: String
+        let symbol: String
+        let severity: Severity
+    }
+
+    /// ขอบล่าง km/h ของแต่ละระดับ (แปลงจากช่วง m/s ของ WMO) + สัญลักษณ์ตามสิ่งที่เห็นบนบก
+    private static let beaufortTable: [(minKmh: Double, name: String, symbol: String, severity: Severity)] = [
+        (0,   "Calm",            "🧘", .neutral),  // 0  ควันลอยตรงขึ้นฟ้า
+        (1,   "Light air",       "🪶", .good),     // 1  ควันเอนตามลม ใบพัดวัดลมยังไม่หมุน
+        (6,   "Light breeze",    "🍃", .good),     // 2  ใบไม้ไหวเบาๆ รู้สึกลมปะทะหน้า
+        (12,  "Gentle breeze",   "🎐", .good),     // 3  ใบไม้-กิ่งเล็กไหวตลอด ธงเริ่มกาง
+        (20,  "Moderate breeze", "🪁", .fair),     // 4  ฝุ่นและกระดาษปลิว กิ่งเล็กโยก (ว่าวขึ้นดี)
+        (29,  "Fresh breeze",    "💨", .fair),     // 5  ต้นไม้เล็กโยกทั้งต้น
+        (39,  "Strong breeze",   "☂️", .warn),     // 6  กิ่งใหญ่โยก กางร่มลำบาก
+        (50,  "Near gale",       "🌳", .warn),     // 7  ต้นไม้ทั้งต้นไหว เดินสวนลมลำบาก
+        (62,  "Gale",            "🌬️", .danger),   // 8  กิ่งไม้หัก เดินแทบไม่ไหว
+        (75,  "Strong gale",     "🏚️", .danger),   // 9  หลังคา-กระเบื้องเริ่มเสียหาย
+        (89,  "Storm",           "🌊", .danger),   // 10 ต้นไม้ถอนราก สิ่งปลูกสร้างเสียหายมาก
+        (103, "Violent storm",   "🌪️", .extreme),  // 11 เสียหายเป็นวงกว้าง
+        (118, "Hurricane",       "🌀", .extreme),  // 12 ความเสียหายรุนแรง
+    ]
+
+    static func beaufort(_ kmh: Double?) -> Beaufort? {
+        guard let kmh else { return nil }
+        let i = beaufortTable.lastIndex { kmh >= $0.minKmh } ?? 0
+        let row = beaufortTable[i]
+        return Beaufort(force: i, name: row.name, symbol: row.symbol, severity: row.severity)
+    }
+
+    // ลม (km/h) — คำอธิบายตามระดับ Beaufort
     static func wind(_ s: Double?) -> Descriptor {
-        guard let s else { return Descriptor(emojiText: "🤷 N/A", severity: .neutral) }
-        switch s {
-        case ..<2:   return Descriptor(emojiText: "🧘 Calm", severity: .neutral)
-        case ..<12:  return Descriptor(emojiText: "🍃 Light", severity: .good)
-        case ..<29:  return Descriptor(emojiText: "💨 Moderate", severity: .fair)
-        case ..<50:  return Descriptor(emojiText: "🌬️ Strong", severity: .warn)
-        case ..<75:  return Descriptor(emojiText: "🌪️ Gale", severity: .danger)
-        case ..<103: return Descriptor(emojiText: "⛈️ Storm", severity: .danger)
-        default:     return Descriptor(emojiText: "🌀 Hurricane", severity: .extreme)
-        }
+        guard let b = beaufort(s) else { return Descriptor(emojiText: "🤷 N/A", severity: .neutral) }
+        return Descriptor(emojiText: "\(b.symbol) \(b.name)", severity: b.severity)
     }
 
     // ฝนตก (mm/h)

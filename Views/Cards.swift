@@ -166,6 +166,7 @@ struct WindCard: View {
         let speed = m.windSpeed
         let gust = m.windGust
         let desc = WX.wind(speed)
+        let bft = WX.beaufort(speed)
         Card(title: "Wind • Gust", systemIcon: "wind",
              accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h")) {
             HStack(spacing: 16) {
@@ -175,6 +176,9 @@ struct WindCard: View {
                             "\(WX.degToArrow(obs.winddir)) \(WX.fmtInt(obs.winddir))° \(WX.degToCompass(obs.winddir))")
                     InfoRow("💨 Speed", WX.fmt(speed, suffix: " km/h"))
                     InfoRow("🌪️ Gust", WX.fmt(gust, suffix: " km/h"))
+                    // ระดับลมมาตรา Beaufort 0–12 (WMO)
+                    InfoRow("🎚️ Beaufort", bft.map { "Force \($0.force)" } ?? "-",
+                            valueColor: desc.severity.color)
                     InfoRow("📝 Desc", desc.emojiText, valueColor: desc.severity.color)
                 }
             }
