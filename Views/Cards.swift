@@ -75,9 +75,17 @@ struct HeroCard: View {
 
             // ไอคอนสภาพอากาศใหญ่กลางแบนเนอร์ — ย้ายมาจากข้าง ๆ อุณหภูมิ
             // เริ่ม 86 → 172 (ใหญ่ไป) → 138 → ลดอีก 20% เหลือ 110 (ผู้ใช้ขอ)
-            Text(emoji)
-                .font(.system(size: 110))
-                .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
+            // พร้อมคำพยากรณ์ชั่วโมงแรกใต้ไอคอน (เช่น "Clear Sky", "Light Rain")
+            VStack(spacing: 2) {
+                Text(emoji)
+                    .font(.system(size: 110))
+                    .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
+                if let desc = store.forecast.first?.weatherDesc, !desc.isEmpty {
+                    Text(desc)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+            }
 
             Spacer(minLength: 16)
 
