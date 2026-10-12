@@ -85,6 +85,9 @@ struct Card<Content: View>: View {
     let systemIcon: String
     var accent: LinearGradient = Theme.gold
     var badge: String? = nil
+    /// ความสูงขั้นต่ำ — การ์ดแถวแรกของ Dashboard ใช้ค่าที่ต่ำกว่าเพื่อให้เห็น
+    /// Hourly Forecast ครบโดยไม่ต้อง scroll
+    var minHeight: CGFloat = 245
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -115,7 +118,7 @@ struct Card<Content: View>: View {
             content()
         }
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 245, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
         .glassCard()
     }
 }
@@ -325,6 +328,9 @@ struct UVSemiGauge: View {
             readout
         }
         .frame(width: 128, height: 128)
+        // ใต้ตัวเลข UV มีที่ว่าง ~11pt ในกรอบ — ตัดออกจาก layout ให้การ์ดเตี้ยลง
+        // (ไม่เปลี่ยนเฟรมภายใน จุดหมุนเข็มจึงยังอยู่ที่เดิม)
+        .padding(.bottom, -11)
     }
 
     /// ครึ่งวงบน 11 ช่อง — trim 0.5=9 นาฬิกา → 1.0=3 นาฬิกา (ค่าเพิ่มตามเข็ม)
@@ -384,7 +390,7 @@ struct UVSemiGauge: View {
                 .kerning(1)
                 .foregroundStyle(.white.opacity(0.5))
         }
-        .offset(y: 40)
+        .offset(y: 36)
     }
 }
 

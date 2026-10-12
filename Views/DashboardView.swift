@@ -6,7 +6,7 @@ struct DashboardView: View {
     // ทันทีที่ store.refresh() สำเร็จ และ TimelineView หัวใจของตัวเอง (แบบ HeroCard)
     // ขับใหม่ทุกวินาที แม้ Live ภายนอกหรือ objectWillChange จะหยุดชะงัก
     @ObservedObject var store: WeatherStore
-    private let columns = [GridItem(.adaptive(minimum: 300), spacing: 14)]
+    private let columns = [GridItem(.adaptive(minimum: 300), spacing: 10)]
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -16,10 +16,10 @@ struct DashboardView: View {
 
     private var dashboardContent: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 HeroCard(store: store)
 
-                LazyVGrid(columns: columns, spacing: 14) {
+                LazyVGrid(columns: columns, spacing: 10) {
                     ThermalCard(obs: store.obs)
                     WindCard(obs: store.obs)
                     RainCard(obs: store.obs)
@@ -56,7 +56,7 @@ struct DashboardView: View {
                         .frame(height: 114)
                     }
                     .padding(.top, 4)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 4)
                 }
             }
             .padding(16)

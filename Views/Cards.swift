@@ -37,7 +37,7 @@ struct HeroCard: View {
         let moon = MoonInfo.calculate()
 
         return HStack(alignment: .center, spacing: 20) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("\(store.obs.neighborhood.isEmpty ? store.config.stationID : store.obs.neighborhood) • STATION \(store.config.stationID)")
                     .font(.system(size: 11, weight: .semibold))
                     .kerning(1.5)
@@ -114,7 +114,8 @@ struct HeroCard: View {
                 }
             }
         }
-        .padding(22)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
         .glassCard(corner: 20)
     }
@@ -140,6 +141,10 @@ struct HeroChip: View {
 
 // MARK: - การ์ดทั้ง 8 ของ Dashboard
 
+/// ความสูงการ์ดแถวแรก (Thermal / Wind / Rain / Solar) — เท่าเนื้อหาที่สูงสุดในแถว
+/// แทน 245 เดิม ที่เหลือที่ว่างเยอะ ให้ Hourly Forecast ขึ้นมาเห็นครบโดยไม่ต้อง scroll
+let firstRowCardHeight: CGFloat = 188
+
 struct ThermalCard: View {
     let obs: PWSObservation
 
@@ -147,12 +152,16 @@ struct ThermalCard: View {
         let m = obs.metric
         let feel = WX.feeling(m.heatIndex)
         Card(title: "Thermal Comfort", systemIcon: "thermometer.medium",
-             accent: Theme.fire, badge: WX.fmt(m.temp, 0, suffix: "°C")) {
-            InfoRow("🌡️ Temperature", WX.fmt(m.temp, suffix: " °C"))
-            InfoRow("🔥 Feels like", WX.fmt(m.heatIndex, suffix: " °C"))
-            InfoRow("🤔 Feeling", feel.emojiText, valueColor: feel.severity.color)
-            InfoRow("💧 Dew point", WX.fmt(m.dewpt, suffix: " °C"))
-            InfoRow("❄️ Wind chill", WX.fmt(m.windChill, suffix: " °C"))
+             accent: Theme.fire, badge: WX.fmt(m.temp, 0, suffix: "°C"),
+             minHeight: firstRowCardHeight) {
+            // ระยะแถว 8 (แทน 12 ของ Card) ให้พอดีความสูงแถวแรกแบบ compact
+            VStack(alignment: .leading, spacing: 8) {
+                InfoRow("🌡️ Temperature", WX.fmt(m.temp, suffix: " °C"))
+                InfoRow("🔥 Feels like", WX.fmt(m.heatIndex, suffix: " °C"))
+                InfoRow("🤔 Feeling", feel.emojiText, valueColor: feel.severity.color)
+                InfoRow("💧 Dew point", WX.fmt(m.dewpt, suffix: " °C"))
+                InfoRow("❄️ Wind chill", WX.fmt(m.windChill, suffix: " °C"))
+            }
         }
     }
 }
@@ -168,7 +177,8 @@ struct WindCard: View {
         let desc = WX.wind(speed)
         let bft = WX.beaufort(speed)
         Card(title: "Wind • Gust", systemIcon: "wind",
-             accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h")) {
+             accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h"),
+             minHeight: firstRowCardHeight) {
             HStack(spacing: 16) {
                 WindGauge(speed: speed, gust: gust, degrees: obs.winddir)
                 VStack(alignment: .leading, spacing: 6) {
@@ -193,7 +203,8 @@ struct RainCard: View {
         let m = obs.metric
         let desc = WX.rain(m.precipRate)
         Card(title: "Rainfall", systemIcon: "cloud.rain",
-             accent: Theme.rain, badge: WX.fmt(m.precipTotal, 0, suffix: " mm")) {
+             accent: Theme.rain, badge: WX.fmt(m.precipTotal, 0, suffix: " mm"),
+             minHeight: firstRowCardHeight) {
             InfoRow("📈 Rate", WX.fmt(m.precipRate, 2, suffix: " mm/h"))
             InfoRow("💧 Intensity", desc.emojiText, valueColor: desc.severity.color)
             InfoRow("📅 Today", WX.fmt(m.precipTotal, 1, suffix: " mm"))
@@ -208,7 +219,8 @@ struct SolarUVCard: View {
         let uvDesc = WX.uv(obs.uv)
         let solarDesc = WX.solar(obs.solarRadiation)
         Card(title: "Solar • UV", systemIcon: "sun.max",
-             accent: Theme.solar, badge: "UV \(WX.fmtInt(obs.uv))") {
+             accent: Theme.solar, badge: "UV \(WX.fmtInt(obs.uv))",
+             minHeight: firstRowCardHeight) {
             HStack(spacing: 16) {
                 UVSemiGauge(uv: obs.uv)
                 VStack(alignment: .leading, spacing: 6) {
