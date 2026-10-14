@@ -27,7 +27,7 @@ struct DashboardView: View {
                     HumidityCard(obs: store.obs)
                     PressureAQICard(obs: store.obs, air: store.air)
                     MoonCard()
-                    SunSeasonCard(obs: store.obs)
+                    SunSeasonCard(latitude: store.config.latitude, longitude: store.config.longitude)
                 }
 
                 if !store.forecast.isEmpty {

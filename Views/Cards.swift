@@ -362,11 +362,14 @@ struct MoonCard: View {
 }
 
 struct SunSeasonCard: View {
-    let obs: PWSObservation
+    /// พิกัดสวนจาก config.ini (พิกัดสถานีบน weather.com คลาดจากสวนจริง ~7 กม.
+    /// และหายไปตอนสถานี offline)
+    let latitude: Double
+    let longitude: Double
     let season = SunAndSeason.season()
 
     var body: some View {
-        let sun = SunAndSeason.sunTimes(lat: obs.lat ?? 0, lon: obs.lon ?? 0)
+        let sun = SunAndSeason.sunTimes(lat: latitude, lon: longitude)
         Card(title: "Sun Rise/Set • Seasons", systemIcon: "sunrise",
              accent: Theme.gold, badge: "\(season.emoji) \(season.name)") {
             if let sun {
