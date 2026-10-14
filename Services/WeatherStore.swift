@@ -29,6 +29,8 @@ final class WeatherStore: ObservableObject {
     private let logger = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "store")
     private var refreshCount = 0
     private var history: [PWSHourlyObs] = []
+    /// พยากรณ์ดิบชุดล่าสุดที่ดึงสำเร็จ — ใช้ต่อเมื่อ Open-Meteo ล่มชั่วคราว (เช่น HTTP 503)
+    private var lastForecast: (upcoming: [OWForecastItem], past: [OWForecastItem], at: Date)?
     private var historyFetchedAt: Date?
 
     init(config: AppConfig = AppConfig.load()) {
@@ -65,9 +67,22 @@ final class WeatherStore: ObservableObject {
             stationOffline = false
             obsError = msg
         }
+        // ดึงพยากรณ์ไม่สำเร็จ → ใช้ชุดล่าสุดต่อ (ตัดชั่วโมงที่ผ่านไปแล้วออก) แทนการล้างทิ้งทั้งแถว
+        var forecastError = f.error
+        var upcoming = f.upcoming, past = f.past
+        if !upcoming.isEmpty {
+            lastForecast = (upcoming, past, Date())
+        } else if let last = lastForecast {
+            let cutoff = Date().addingTimeInterval(-90 * 60).timeIntervalSince1970
+            upcoming = last.upcoming.filter { $0.dt >= cutoff }
+            past = last.past
+            let at = last.at.formatted(.dateTime.hour().minute())
+            forecastError = "พยากรณ์ดึงไม่สำเร็จ (\(f.error)) — แสดงชุดล่าสุดเมื่อ \(at)"
+            logger.log("ใช้พยากรณ์ชุดล่าสุด (\(at, privacy: .public)) แทน: \(f.error, privacy: .public)")
+        }
         if config.sensorCorrection {
             await refreshHistoryIfNeeded()
-            let c = SensorCorrection.compute(past: f.past, history: history)
+            let c = SensorCorrection.compute(past: past, history: history)
             if c != correction {
                 logger.log("ค่าปรับแก้พยากรณ์จากเซนเซอร์: \(c?.summary ?? "ข้อมูลไม่พอ", privacy: .public) (\(c?.pairedHours ?? 0, privacy: .public) ชม.)")
             }
@@ -75,16 +90,17 @@ final class WeatherStore: ObservableObject {
         } else {
             correction = nil
         }
-        let corrected = correction?.apply(f.upcoming) ?? f.upcoming
+        let corrected = correction?.apply(upcoming) ?? upcoming
         if config.sensorCorrection && !stationOffline {
             (forecast, nowcast) = Nowcast.anchor(corrected, obs: obs)
         } else {
             (forecast, nowcast) = (corrected, nil)
         }
-        air = a.0
+        // คุณภาพอากาศก็เช่นกัน — ดึงไม่สำเร็จคงค่าเดิมไว้
+        if a.1.isEmpty { air = a.0 }
 
         // รวม error แบบเดียวกับ Python: obs มาก่อน แล้ว forecast แล้ว aqi
-        let errors = [obsError, f.error, a.1].filter { !$0.isEmpty }
+        let errors = [obsError, forecastError, a.1].filter { !$0.isEmpty }
         errorMessage = errors.joined(separator: " • ")
         if errors.isEmpty {
             // log ค่าจริงที่ได้รับ + เลขกำกับรอบ (กันข้อความซ้ำถูกยุบโดย unified log)
