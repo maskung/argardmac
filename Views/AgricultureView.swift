@@ -14,7 +14,7 @@ struct AgricultureView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("AGRICULTURE • วิเคราะห์อากาศเพื่อการพ่นยา")
+                Text("AGRICULTURE AI • วิเคราะห์อากาศเพื่อการพ่นยา")
                     .font(.system(size: 11, weight: .semibold))
                     .kerning(1.5)
                     .foregroundStyle(Theme.textGold)
@@ -353,6 +353,9 @@ struct GeminiAnswerText: View {
     private func line(_ s: String) -> some View {
         if s.isEmpty {
             Spacer().frame(height: 2)
+        } else if s.allSatisfy({ $0 == "-" || $0 == "*" || $0 == "_" }) && s.count >= 3 {
+            // เส้นคั่น markdown (--- / *** / ___)
+            Divider().overlay(.white.opacity(0.12)).padding(.vertical, 2)
         } else if s.hasPrefix("#") {
             inline(String(s.drop(while: { $0 == "#" })).trimmingCharacters(in: .whitespaces))
                 .font(.system(size: 15, weight: .bold))
