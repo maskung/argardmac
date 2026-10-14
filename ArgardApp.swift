@@ -2,7 +2,7 @@ import SwiftUI
 
 /// ข้อมูลเวอร์ชั่นของแอพ (แก้ที่เดียว — อย่าลืมแก้ Info.plist ให้ตรงกันตอน bump)
 enum AppInfo {
-    static let version = "1.3.0"
+    static let version = "1.4.0"
     static let copyright = "Copyright © 2026 Suphanut Thanyaboon (suphanut@gmail.com)"
 }
 
@@ -33,6 +33,8 @@ struct ArgardApp: App {
                     .keyboardShortcut("1", modifiers: .command)
                 Button("12h Forecast") { store.tab = .forecast }
                     .keyboardShortcut("2", modifiers: .command)
+                Button("Agriculture") { store.tab = .agriculture }
+                    .keyboardShortcut("3", modifiers: .command)
             }
         }
     }

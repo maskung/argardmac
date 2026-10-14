@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var store: WeatherStore
+    /// ตัววิเคราะห์การพ่นยา (Gemini) — อยู่ระดับนี้ สลับแท็บแล้วค่าที่กรอก/ผลวิเคราะห์ไม่หาย
+    @StateObject private var sprayAdvisor = SprayAdvisor()
 
     var body: some View {
         // Live: ประเมินใหม่ทุก 1 วิ — ให้ header/การ์ด/banner ทุกส่วนอ่านค่าจาก store
@@ -31,6 +33,7 @@ struct ContentView: View {
                             switch store.tab {
                             case .dashboard: DashboardView(store: store)
                             case .forecast: ForecastView(store: store)
+                            case .agriculture: AgricultureView(store: store, advisor: sprayAdvisor)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

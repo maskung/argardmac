@@ -10,6 +10,8 @@ struct AppConfig {
     var latitude: Double = 12.701
     var longitude: Double = 102.231
     var refreshSeconds: Int = 60
+    var geminiAPIKey: String = ""
+    var geminiModel: String = "gemini-3.8-flash"
 
     static let supportDir = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -47,6 +49,11 @@ struct AppConfig {
 
         [General]
         REFRESH_SECONDS = 60
+
+        [Gemini]
+        # ขอ key ฟรีที่ https://aistudio.google.com/apikey (หรือใส่ผ่านแท็บ Agriculture)
+        API_KEY =
+        MODEL = gemini-3.8-flash
         """
     }
 
@@ -71,9 +78,36 @@ struct AppConfig {
             case ("openweather", "LATITUDE"): cfg.latitude = Double(value) ?? cfg.latitude
             case ("openweather", "LONGITUDE"): cfg.longitude = Double(value) ?? cfg.longitude
             case ("general", "REFRESH_SECONDS"): cfg.refreshSeconds = Int(value) ?? cfg.refreshSeconds
+            case ("gemini", "API_KEY"): cfg.geminiAPIKey = value
+            case ("gemini", "MODEL"): cfg.geminiModel = value.isEmpty ? cfg.geminiModel : value
             default: break
             }
         }
         return cfg
+    }
+
+    /// บันทึก Gemini API key ลง config.ini — แก้บรรทัด API_KEY ใน [Gemini] ถ้ามีอยู่แล้ว
+    /// ไม่มี section ก็ต่อท้ายไฟล์ให้ (ค่าอื่นและ comment ในไฟล์คงเดิม)
+    static func saveGeminiKey(_ key: String) throws {
+        let text = (try? String(contentsOf: configURL, encoding: .utf8)) ?? defaultFileText
+        var lines = text.components(separatedBy: "\n")
+        func trimmed(_ i: Int) -> String { lines[i].trimmingCharacters(in: .whitespaces) }
+        func keyName(_ i: Int) -> String? {
+            guard let eq = lines[i].firstIndex(of: "=") else { return nil }
+            return lines[i][..<eq].trimmingCharacters(in: .whitespaces).uppercased()
+        }
+        let newLine = "API_KEY = \(key)"
+        if let start = lines.indices.first(where: { trimmed($0).lowercased() == "[gemini]" }) {
+            let end = lines.indices.first(where: { $0 > start && trimmed($0).hasPrefix("[") }) ?? lines.count
+            if let k = (start + 1 ..< end).first(where: { keyName($0) == "API_KEY" }) {
+                lines[k] = newLine
+            } else {
+                lines.insert(newLine, at: start + 1)
+            }
+        } else {
+            if let last = lines.last, !last.trimmingCharacters(in: .whitespaces).isEmpty { lines.append("") }
+            lines += ["[Gemini]", newLine, "MODEL = gemini-3.8-flash"]
+        }
+        try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
     }
 }

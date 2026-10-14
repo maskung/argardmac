@@ -7,7 +7,7 @@ import os
 /// และคุม auto-refresh ตาม REFRESH_SECONDS
 @MainActor
 final class WeatherStore: ObservableObject {
-    enum Tab: Hashable { case dashboard, forecast }
+    enum Tab: Hashable { case dashboard, forecast, agriculture }
 
     @Published var obs = PWSObservation()
     @Published var forecast: [OWForecastItem] = []
