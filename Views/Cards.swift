@@ -33,7 +33,11 @@ struct HeroCard: View {
 
         let m = store.obs.metric
         let feel = WX.feeling(m.heatIndex)
-        let weatherIcon = store.forecast.first?.weatherIcon ?? "02d"
+        // ทดลองดูไอคอน/แอนิเมชันของสภาพอากาศอื่นได้โดยไม่ต้องรออากาศจริง:
+        //   defaults write th.suphanutthanyaboon.argard debug.heroIcon 11n   (09=ปรอย 10=ฝน 11=พายุ 50=หมอก)
+        //   defaults delete th.suphanutthanyaboon.argard debug.heroIcon      (กลับเป็นค่าจริง)
+        let weatherIcon = UserDefaults.standard.string(forKey: "debug.heroIcon")
+            ?? store.forecast.first?.weatherIcon ?? "02d"
         let moon = MoonInfo.calculate()
 
         return HStack(alignment: .center, spacing: 20) {
@@ -77,8 +81,7 @@ struct HeroCard: View {
             // เริ่ม 86 → 172 (ใหญ่ไป) → 138 → ลดอีก 20% เหลือ 110 (ผู้ใช้ขอ)
             // พร้อมคำพยากรณ์ชั่วโมงแรกใต้ไอคอน (เช่น "Clear Sky", "Light Rain")
             VStack(spacing: 2) {
-                WeatherIconView(icon: weatherIcon, size: 110)
-                    .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
+                AnimatedWeatherIcon(icon: weatherIcon, size: 110)   // ใส่เงาให้ภายในเอง (เฉพาะส่วนนิ่ง)
                 if let desc = store.forecast.first?.weatherDesc, !desc.isEmpty {
                     Text(desc)
                         .font(.system(size: 13, weight: .medium))

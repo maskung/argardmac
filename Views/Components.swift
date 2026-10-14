@@ -721,3 +721,190 @@ struct WeatherIconView: View {
         }
     }
 }
+
+// MARK: - ไอคอนสภาพอากาศเคลื่อนไหว (ไอคอนใหญ่กลาง Hero card)
+
+/// ฝน: เมฆ ☁️ + เม็ดฝนตกลงมาเป็นสาย / พายุ: เพิ่มฟ้าแลบ ⚡ วาบเป็นจังหวะพร้อมแสงสว่างรอบเมฆ
+/// สภาพอากาศอื่นยังเป็นภาพนิ่ง (WeatherIconView) — กรอบขนาดเท่า emoji เดิม ไม่ดัน layout
+/// แอนิเมชันใช้ Core Animation (เลเยอร์ละเม็ด + keyframe) ซึ่ง render server ของ macOS
+/// เล่นให้เอง — เดิมวาด SwiftUI Canvas ทีละเฟรม 30 fps แล้ว CPU ของแอปขึ้นจาก 6.6% เป็น 30%
+struct AnimatedWeatherIcon: View {
+    let icon: String
+    let size: CGFloat
+
+    /// จำนวนเม็ดฝน (nil = ไม่ใช่ฝน)
+    private var drops: Int? {
+        if icon.contains("11") { return 18 }      // พายุฝนฟ้าคะนอง
+        if icon.contains("10") { return 14 }      // ฝน
+        if icon.contains("09") { return 9 }       // ฝนปรอย/ฝนไล่ช้าง
+        return nil
+    }
+
+    var body: some View {
+        if let drops {
+            ZStack {
+                RainLayerView(size: size, drops: drops, thunder: icon.contains("11"))
+                // เมฆนิ่ง วางทับบนสุด (กลาง x, 32% ของความสูงกรอบ)
+                Text("☁️")
+                    .font(.system(size: size * 0.95))
+                    .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
+                    .position(x: size * 1.25 / 2, y: size * 1.2 * 0.32)
+            }
+            .frame(width: size * 1.25, height: size * 1.2)
+        } else {
+            WeatherIconView(icon: icon, size: size)
+                .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
+        }
+    }
+}
+
+/// เลเยอร์ Core Animation ใต้เมฆ: แสงฟ้าแลบ (หลังสุด) → เม็ดฝน → สายฟ้า
+private struct RainLayerView: NSViewRepresentable {
+    let size: CGFloat
+    let drops: Int
+    let thunder: Bool
+
+    func makeNSView(context: Context) -> RainNSView { RainNSView(size: size) }
+    func updateNSView(_ view: RainNSView, context: Context) {
+        view.update(drops: drops, thunder: thunder)
+    }
+}
+
+/// เม็ดฝน = เลเยอร์ละเม็ด เคลื่อนจากใต้เมฆลงล่างแบบวนซ้ำ (render server เล่นให้ ไม่กิน CPU แอป)
+/// ไม่ใช้ CAEmitterLayer: ลองแล้วทิศพุ่งของอนุภาคกลับด้านกับพิกัดตำแหน่ง ฝนลอยขึ้นแทน
+final class RainNSView: NSView {
+    private let size: CGFloat
+    private let glow = CAGradientLayer()
+    private let bolt = CALayer()
+    private var dropLayers: [CALayer] = []
+    private var drops = 0
+    private var thunder = false
+    private lazy var dropImage = Self.dropImage(length: size * 0.10, width: size * 0.022)
+
+    init(size: CGFloat) {
+        self.size = size
+        super.init(frame: .zero)
+        wantsLayer = true
+        // แสงสว่างวาบรอบเมฆ (radial ขาว → ใส)
+        glow.type = .radial
+        glow.colors = [NSColor.white.withAlphaComponent(0.45).cgColor, NSColor.clear.cgColor]
+        glow.startPoint = CGPoint(x: 0.5, y: 0.5)
+        glow.endPoint = CGPoint(x: 1, y: 1)
+        glow.opacity = 0
+        layer?.addSublayer(glow)
+        // สายฟ้า ⚡ ใต้เมฆ — โผล่เฉพาะตอนแลบ
+        bolt.contents = Self.emojiImage("⚡", fontSize: size * 0.42)
+        bolt.contentsGravity = .resizeAspect
+        bolt.opacity = 0
+        layer?.addSublayer(bolt)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// SwiftUI เรียกทุกครั้งที่ Hero card render (ทุก 1 วิ) — ทำงานเฉพาะเมื่อค่าเปลี่ยนจริง
+    /// ไม่งั้นแอนิเมชันจะถูกตั้งใหม่ ฝนกระตุกทุกวินาที
+    func update(drops: Int, thunder: Bool) {
+        if drops != self.drops {
+            self.drops = drops
+            dropLayers.forEach { $0.removeFromSuperlayer() }
+            dropLayers = (0..<drops).map { _ in
+                let l = CALayer()
+                l.contents = dropImage
+                l.contentsGravity = .resize
+                layer?.insertSublayer(l, below: bolt)
+                return l
+            }
+            needsLayout = true
+        }
+        if thunder != self.thunder {
+            self.thunder = thunder
+            for l in [glow, bolt] as [CALayer] {
+                l.removeAnimation(forKey: "flash")
+                if thunder { l.add(Self.flashAnimation(), forKey: "flash") }
+            }
+        }
+    }
+
+    /// เลขสุ่มคงที่ต่อเม็ด (0..<1)
+    private func frac(_ x: Double) -> Double { x - x.rounded(.down) }
+
+    override func layout() {
+        super.layout()
+        let w = bounds.width, h = bounds.height
+        guard w > 0, h > 0 else { return }
+        /// เลเยอร์นับ y จากล่างขึ้นบน (กลับกับ SwiftUI) — แปลงจากตำแหน่งที่วัดจากขอบบน
+        func fromTop(_ y: CGFloat, height: CGFloat = 0) -> CGFloat { h - y - height }
+        let scale = window?.backingScaleFactor ?? 2
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let r = w * 0.55
+        glow.frame = CGRect(x: w / 2 - r, y: fromTop(h * 0.32 - r * 0.8, height: r * 1.6),
+                            width: r * 2, height: r * 1.6)
+        let b = size * 0.5
+        bolt.frame = CGRect(x: w * 0.5 - b / 2, y: fromTop(h * 0.68 - b / 2, height: b), width: b, height: b)
+
+        // เม็ดฝน: ตกจากใต้ฐานเมฆ ลงไป 38% ของกรอบ เอียงซ้ายเล็กน้อย จางตอนเริ่ม/จบ
+        let len = size * 0.10, dropW = len * 0.3 + size * 0.044, dropH = len + size * 0.044
+        let top = h * 0.50, fall = h * 0.38
+        for (i, l) in dropLayers.enumerated() {
+            let d = Double(i)
+            let x0 = w * (0.26 + 0.50 * frac(d * 0.618))
+            let duration = 1 / (1.1 + 0.6 * frac(d * 0.377))       // วินาทีต่อรอบ
+            let start = CGPoint(x: x0, y: fromTop(top))
+            let end = CGPoint(x: x0 - len * 0.35, y: fromTop(top + fall))
+            l.bounds = CGRect(x: 0, y: 0, width: dropW, height: dropH)
+            l.contentsScale = scale
+            l.position = start
+            let move = CABasicAnimation(keyPath: "position")
+            move.fromValue = NSValue(point: start)
+            move.toValue = NSValue(point: end)
+            let fade = CAKeyframeAnimation(keyPath: "opacity")
+            fade.values = [0, 0.9, 0.9, 0]
+            fade.keyTimes = [0, 0.2, 0.7, 1]
+            let g = CAAnimationGroup()
+            g.animations = [move, fade]
+            g.duration = duration
+            g.repeatCount = .infinity
+            g.timeOffset = frac(d * 0.731) * duration           // เริ่มคนละจังหวะ
+            l.add(g, forKey: "rain")
+        }
+        for l in [glow, bolt] as [CALayer] { l.contentsScale = scale }
+        CATransaction.commit()
+    }
+
+    /// จังหวะฟ้าแลบ: ทุก 4.2 วิ แลบสองครั้งติดกันแล้วจางหาย
+    private static func flashAnimation() -> CAKeyframeAnimation {
+        let a = CAKeyframeAnimation(keyPath: "opacity")
+        let d = 4.2
+        a.values = [1, 1, 0.15, 0.15, 0.95, 0.95, 0, 0]
+        a.keyTimes = [0, 0.07, 0.071, 0.15, 0.151, 0.22, 0.55, d].map { NSNumber(value: $0 / d) }
+        a.duration = d
+        a.repeatCount = .infinity
+        return a
+    }
+
+    /// เส้นเม็ดฝนเอียงจากขวาบนลงซ้ายล่าง (ตามทิศตก) — วาดในแกน y ขึ้นบน แสดงในเลเยอร์ตรงตามนี้
+    private static func dropImage(length: CGFloat, width: CGFloat) -> CGImage? {
+        let w = length * 0.3 + width * 2, h = length + width * 2
+        let img = NSImage(size: NSSize(width: w, height: h), flipped: false) { _ in
+            let p = NSBezierPath()
+            p.move(to: NSPoint(x: w - width, y: h - width))
+            p.line(to: NSPoint(x: width + length * 0.05, y: width))
+            p.lineWidth = width
+            p.lineCapStyle = .round
+            NSColor(red: 0.55, green: 0.78, blue: 1.0, alpha: 1).setStroke()
+            p.stroke()
+            return true
+        }
+        var rect = NSRect(x: 0, y: 0, width: w * 2, height: h * 2)
+        return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+    }
+
+    private static func emojiImage(_ s: String, fontSize: CGFloat) -> CGImage? {
+        let str = NSAttributedString(string: s, attributes: [.font: NSFont.systemFont(ofSize: fontSize)])
+        let sz = str.size()
+        let img = NSImage(size: sz, flipped: false) { _ in str.draw(at: .zero); return true }
+        var rect = NSRect(x: 0, y: 0, width: sz.width * 2, height: sz.height * 2)
+        return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+    }
+}
