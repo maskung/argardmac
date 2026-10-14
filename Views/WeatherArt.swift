@@ -241,6 +241,9 @@ struct RealisticSun: View {
 struct RealisticWeatherIcon: View {
     let icon: String
     let size: CGFloat
+    /// false = ภาพนิ่ง (ช่องพยากรณ์รายชั่วโมง): วาดเม็ดฝน/สายฟ้าค้างไว้ หมอกไม่ลอย
+    /// true = ไอคอนกลาง Hero card: ฝน/ฟ้าแลบมาจาก RainNSView ที่ซ้อนอยู่ข้างหลัง
+    var animated = true
 
     enum Kind { case sun, partly, cloudy, rain, storm, moon, partlyNight, fog }
 
@@ -274,9 +277,11 @@ struct RealisticWeatherIcon: View {
                 RealisticCloud(tone: .white, width: size * 0.95)
                     .position(x: w * 0.45, y: h * 0.58)
             case .rain:
+                if !animated { StaticRain(size: size, bolt: false).frame(width: w, height: h) }
                 RealisticCloud(tone: .grey, width: size * 1.0)
                     .position(x: w / 2, y: h * 0.36)
             case .storm:
+                if !animated { StaticRain(size: size, bolt: true).frame(width: w, height: h) }
                 RealisticCloud(tone: .dark, width: size * 1.0)
                     .position(x: w / 2, y: h * 0.36)
             case .moon:
@@ -288,12 +293,79 @@ struct RealisticWeatherIcon: View {
                 RealisticCloud(tone: .grey, width: size * 0.92)
                     .position(x: w * 0.57, y: h * 0.62)
             case .fog:
-                RealisticFog(width: size * 1.05)
-                    .frame(width: w, height: h)
+                if animated {
+                    RealisticFog(width: size * 1.05)
+                        .frame(width: w, height: h)
+                } else {
+                    StaticFog(width: size * 1.05)
+                        .position(x: w / 2, y: h / 2)
+                }
             case nil:
                 EmptyView()
             }
         }
         .frame(width: w, height: h)
+    }
+}
+
+/// ฝนแบบภาพนิ่งใต้เมฆ (ช่องพยากรณ์รายชั่วโมง) — เม็ดเอียงสั้น ๆ + สายฟ้าสำหรับพายุ
+/// กรอบเดียวกับ RealisticWeatherIcon (size×1.25 กว้าง, size×1.2 สูง)
+struct StaticRain: View {
+    let size: CGFloat
+    let bolt: Bool
+
+    var body: some View {
+        Canvas { ctx, sz in
+            let w = sz.width, h = sz.height, len = size * 0.14
+            // ตำแหน่งเม็ด (x, y) วัดจากซ้ายบนของกรอบ เป็นสัดส่วน
+            let drops: [(CGFloat, CGFloat)] = [(0.30, 0.66), (0.44, 0.74), (0.58, 0.64), (0.70, 0.76),
+                                               (0.36, 0.86), (0.64, 0.88)]
+            for (x, y) in drops where !(bolt && abs(x - 0.5) < 0.1) {
+                var p = Path()
+                p.move(to: CGPoint(x: w * x, y: h * y))
+                p.addLine(to: CGPoint(x: w * x - len * 0.3, y: h * y + len))
+                ctx.stroke(p, with: .color(Color(red: 0.55, green: 0.78, blue: 1.0)),
+                           style: StrokeStyle(lineWidth: max(1.2, size * 0.045), lineCap: .round))
+            }
+            if bolt {
+                // จุดยอดสายฟ้าเดียวกับ RainNSView.boltImage (วัดจากขอบบนของกรอบสายฟ้า)
+                let pts: [(CGFloat, CGFloat)] = [(0.58, 0.00), (0.30, 0.50), (0.47, 0.50), (0.32, 1.00),
+                                                (0.72, 0.40), (0.54, 0.40), (0.70, 0.00)]
+                let b = size * 0.42, ox = w * 0.5 - b / 2, oy = h * 0.58
+                var p = Path()
+                for (i, (x, y)) in pts.enumerated() {
+                    let pt = CGPoint(x: ox + b * x, y: oy + b * y)
+                    i == 0 ? p.move(to: pt) : p.addLine(to: pt)
+                }
+                p.closeSubpath()
+                var glow = ctx
+                glow.addFilter(.shadow(color: Color(red: 0.45, green: 0.65, blue: 1.0), radius: size * 0.06))
+                glow.fill(p, with: .color(Color(red: 0.96, green: 0.98, blue: 1.0)))
+            }
+        }
+    }
+}
+
+/// หมอกแบบภาพนิ่ง: แถบไอเบลอ 4 ชั้นวางเหลื่อมกัน (แบบเดียวกับหมอกลอยใน Hero card)
+struct StaticFog: View {
+    let width: CGFloat
+
+    var body: some View {
+        let w = width
+        let bands: [(y: CGFloat, len: CGFloat, op: Double, dx: CGFloat)] = [
+            (-0.30, 0.80, 0.55, 0.05), (-0.10, 0.95, 0.75, -0.04), (0.10, 0.85, 0.65, 0.04), (0.30, 0.70, 0.45, -0.05),
+        ]
+        ZStack {
+            ForEach(0..<bands.count, id: \.self) { i in
+                let b = bands[i]
+                Capsule()
+                    .fill(LinearGradient(colors: [.clear, .white.opacity(b.op), .white.opacity(b.op), .clear],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(width: w * b.len, height: w * 0.13)
+                    .blur(radius: w * 0.03)
+                    .offset(x: w * b.dx, y: w * b.y)
+            }
+        }
+        .frame(width: w, height: w * 0.8)
     }
 }

@@ -701,20 +701,16 @@ struct GaugeBar: View {
 
 // MARK: - ไอคอนสภาพอากาศ (emoji + ไอคอนหมอกวาดเอง)
 
-/// แสดงสภาพอากาศจาก icon code แบบ OpenWeather — ปกติใช้ emoji
-/// ยกเว้นหมอก (50x): emoji 🌫️ ของ Apple เป็นกล่องเทาฟุ้ง ๆ ดูไม่ออกบนพื้นเข้ม
-/// จึงใช้ SF Symbol เมฆ + เส้นหมอกสีขาวแทน (กรอบเท่า emoji ขนาดเดียวกัน ไม่ดัน layout)
+/// แสดงสภาพอากาศจาก icon code แบบ OpenWeather — ใช้ไอคอนแบบสมจริง (WeatherArt.swift) แบบภาพนิ่ง
+/// เหลือ emoji เฉพาะแบบที่ยังไม่ได้วาด (หิมะ) — กรอบเท่า emoji ขนาดเดียวกัน ไม่ดัน layout
 struct WeatherIconView: View {
     let icon: String
     let size: CGFloat
 
     var body: some View {
-        if icon.contains("50") {
-            Image(systemName: "cloud.fog.fill")
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, Color(red: 0.78, green: 0.82, blue: 0.88))
-                .font(.system(size: size * 0.9))
-                .frame(width: size * 1.25, height: size * 1.2)
+        if RealisticWeatherIcon.kind(for: icon) != nil {
+            // ไอคอนแบบสมจริงชุดเดียวกับ Hero card แต่เป็นภาพนิ่ง (ผู้ใช้ขอให้ทั้งแอปเป็นแบบเดียวกัน)
+            RealisticWeatherIcon(icon: icon, size: size, animated: false)
         } else {
             Text(WX.weatherEmoji(icon))
                 .font(.system(size: size))
