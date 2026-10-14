@@ -32,11 +32,18 @@ struct DashboardView: View {
 
                 if !store.forecast.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("HOURLY FORECAST")
-                            .font(.system(size: 11, weight: .semibold))
-                            .kerning(1.5)
-                            .foregroundStyle(Theme.textGold)
-                            .padding(.horizontal, 2)
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("HOURLY FORECAST")
+                                .font(.system(size: 11, weight: .semibold))
+                                .kerning(1.5)
+                                .foregroundStyle(Theme.textGold)
+                            Spacer()
+                            // โมเดลที่ใช้ + ค่าปรับแก้จากเซนเซอร์ในสวน
+                            Text(store.forecastSourceText)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        .padding(.horizontal, 2)
                         // เต็มความกว้างหน้าต่างพอดี: นับว่าใส่กี่ชั่วโมงได้จากความกว้างจริง
                         // แล้วยืดเซลล์ให้ชนขอบขวาพอดี (ปรับตามขนาดหน้าต่างอัตโนมัติ)
                         GeometryReader { geo in
@@ -76,8 +83,7 @@ struct CompactHourCell: View {
                 .monospacedDigit()
                 .kerning(0.5)
                 .foregroundStyle(Theme.textGold)
-            Text(WX.weatherEmoji(hour.weatherIcon))
-                .font(.system(size: 24))
+            WeatherIconView(icon: hour.weatherIcon, size: 24)
             Text(WX.fmt(hour.temp, 1, suffix: "°"))
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .monospacedDigit()

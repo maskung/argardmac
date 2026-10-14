@@ -97,6 +97,38 @@ struct PWSMetric: Decodable {
     }
 }
 
+// MARK: - ประวัติรายชั่วโมงของสถานี (/v2/pws/observations/hourly/7day)
+
+struct PWSHourlyResponse: Decodable {
+    let observations: [PWSHourlyObs]?
+}
+
+/// ค่าเฉลี่ยหนึ่งชั่วโมงของสถานี — แถวเวลา hh:59 คือช่วง hh:00–hh:59
+struct PWSHourlyObs: Decodable {
+    var obsTimeUtc: Date?
+    var humidityAvg: Double?
+    var tempAvg: Double?
+    var windspeedAvg: Double?      // km/h
+
+    /// ต้นชั่วโมงของช่วงเฉลี่ย (เทียบกับเวลาพยากรณ์ hh:00)
+    var hourStart: Date? {
+        obsTimeUtc.map { Date(timeIntervalSince1970: (($0.timeIntervalSince1970 - 1) / 3600).rounded(.down) * 3600) }
+    }
+
+    private enum CodingKeys: String, CodingKey { case obsTimeUtc, humidityAvg, metric }
+    private enum MetricKeys: String, CodingKey { case tempAvg, windspeedAvg }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        obsTimeUtc = PWSObservation.parseUTC(try? c.decodeIfPresent(String.self, forKey: .obsTimeUtc))
+        humidityAvg = c.flexibleDouble(.humidityAvg)
+        if let m = try? c.nestedContainer(keyedBy: MetricKeys.self, forKey: .metric) {
+            tempAvg = m.flexibleDouble(.tempAvg)
+            windspeedAvg = m.flexibleDouble(.windspeedAvg)
+        }
+    }
+}
+
 // MARK: - พยากรณ์รายชั่วโมง (Open-Meteo — ฟรี ไม่ต้องใช้ key)
 
 /// โมเดลกลางสำหรับพยากรณ์รายชั่วโมง ที่ view ใช้ทั้งแอพ

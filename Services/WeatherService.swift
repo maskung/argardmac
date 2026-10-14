@@ -53,8 +53,26 @@ struct WeatherService {
             ].joined(separator: ",")),
             .init(name: "wind_speed_unit", value: "ms"),
             .init(name: "forecast_days", value: "2"),
+            // ย้อนหลัง 7 วัน: ค่าที่โมเดลคำนวณไว้ เอาไปเทียบกับเซนเซอร์เพื่อหาค่าปรับแก้
+            .init(name: "past_days", value: "7"),
             .init(name: "timeformat", value: "unixtime"),
             .init(name: "timezone", value: "auto"),
+        ]
+        let model = config.forecastModel.trimmingCharacters(in: .whitespaces)
+        if !model.isEmpty && model != "best_match" {
+            c?.queryItems?.append(.init(name: "models", value: model))
+        }
+        return c?.url
+    }
+
+    /// ค่าเซนเซอร์รายชั่วโมงย้อนหลัง 7 วันของสถานี (ใช้หาค่าปรับแก้พยากรณ์)
+    var hourlyHistoryURL: URL? {
+        var c = URLComponents(string: "https://api.weather.com/v2/pws/observations/hourly/7day")
+        c?.queryItems = [
+            .init(name: "stationId", value: config.stationID),
+            .init(name: "format", value: "json"),
+            .init(name: "units", value: "m"),
+            .init(name: "apiKey", value: config.weatherComAPIKey),
         ]
         return c?.url
     }
@@ -93,24 +111,25 @@ struct WeatherService {
         }
     }
 
-    /// พยากรณ์รายชั่วโมงจาก Open-Meteo — ตัดเหลือชั่วโมงปัจจุบันถึง +24 ชม.
-    func fetchForecast() async -> ([OWForecastItem], String) {
-        guard let url = forecastURL else { return ([], "Bad URL") }
+    /// พยากรณ์รายชั่วโมงจาก Open-Meteo
+    /// upcoming = ชั่วโมงปัจจุบันถึง +24 ชม. / past = 7 วันที่ผ่านมา (ไว้เทียบกับเซนเซอร์)
+    func fetchForecast() async -> (upcoming: [OWForecastItem], past: [OWForecastItem], error: String) {
+        guard let url = forecastURL else { return ([], [], "Bad URL") }
         do {
             let data = try await get(url)
             let resp = try JSONDecoder().decode(OMForecastResponse.self, from: data)
-            guard let h = resp.hourly, let times = h.time else { return ([], "No hourly data") }
+            guard let h = resp.hourly, let times = h.time else { return ([], [], "No hourly data") }
             let cutoff = Date().addingTimeInterval(-90 * 60).timeIntervalSince1970
 
             var items: [OWForecastItem] = []
+            var past: [OWForecastItem] = []
             for (i, t) in times.enumerated() {
-                guard t >= cutoff else { continue }
                 func at(_ arr: [Double?]?, _ i: Int) -> Double? {
                     guard let arr, i < arr.count else { return nil }
                     return arr[i]
                 }
                 let wmo = WX.wmo(at(h.weatherCode, i), isDay: (at(h.isDay, i) ?? 1) == 1)
-                items.append(OWForecastItem(
+                let item = OWForecastItem(
                     dt: t,
                     temp: at(h.temperature, i),
                     feelsLike: at(h.apparentTemperature, i),
@@ -124,10 +143,27 @@ struct WeatherService {
                     visibility: at(h.visibility, i),
                     pop: at(h.precipProbability, i).map { $0 / 100.0 },
                     rain: at(h.precipitation, i)
-                ))
-                if items.count >= 24 { break }
+                )
+                if t < cutoff {
+                    past.append(item)
+                } else if items.count < 24 {
+                    items.append(item)
+                }
             }
-            return (items, items.isEmpty ? "No upcoming hours" : "")
+            return (items, past, items.isEmpty ? "No upcoming hours" : "")
+        } catch {
+            return ([], [], errMsg(error))
+        }
+    }
+
+    /// ค่าเซนเซอร์รายชั่วโมง 7 วันล่าสุด (เฉลี่ยรายชั่วโมงของสถานี)
+    func fetchHourlyHistory() async -> ([PWSHourlyObs], String) {
+        guard let url = hourlyHistoryURL else { return ([], "Bad URL") }
+        do {
+            let data = try await get(url)
+            if data.isEmpty { return ([], "") }       // สถานี offline — ไม่มีประวัติให้
+            let resp = try JSONDecoder().decode(PWSHourlyResponse.self, from: data)
+            return (resp.observations ?? [], "")
         } catch {
             return ([], errMsg(error))
         }

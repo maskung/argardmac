@@ -15,10 +15,16 @@ struct ForecastView: View {
     private var forecastContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("HOURLY FORECAST • NEXT 12 HOURS")
-                    .font(.system(size: 11, weight: .semibold))
-                    .kerning(1.5)
-                    .foregroundStyle(Theme.textGold)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("HOURLY FORECAST • NEXT 12 HOURS")
+                        .font(.system(size: 11, weight: .semibold))
+                        .kerning(1.5)
+                        .foregroundStyle(Theme.textGold)
+                    Spacer()
+                    Text(store.forecastSourceText)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(Array(store.forecast.prefix(12).enumerated()), id: \.offset) { _, hour in
                         ForecastHourCard(hour: hour)
@@ -40,8 +46,7 @@ struct ForecastHourCard: View {
              accent: Theme.violet,
              badge: WX.fmt(hour.temp, 1, suffix: "°C")) {
             HStack(spacing: 8) {
-                Text(WX.weatherEmoji(hour.weatherIcon))
-                    .font(.system(size: 26))
+                WeatherIconView(icon: hour.weatherIcon, size: 26)
                 Text(hour.weatherDesc.capitalized)
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.55))
@@ -54,7 +59,7 @@ struct ForecastHourCard: View {
             InfoRow("☁️ Clouds", WX.fmt(hour.clouds, 0, suffix: " %"))
             InfoRow("💨 Wind",
                     "\(WX.degToArrow(hour.windDeg)) \(WX.fmt(WX.msToKmh(hour.windSpeed), 0, suffix: " km/h"))")
-            InfoRow("👁️ Vis", WX.fmt((hour.visibility ?? 0) / 1000, 1, suffix: " km"))
+            InfoRow("👁️ Vis", WX.fmt(hour.visibility.map { $0 / 1000 }, 1, suffix: " km"))   // ICON ไม่มีค่านี้ → "-"
             InfoRow("🌡️ Pres", WX.fmt(hour.pressure, 0, suffix: " hPa"))
             InfoRow("🌧️ Precip", WX.fmtInt((hour.pop ?? 0) * 100, suffix: " %"))
             if let rain = hour.rain, rain > 0 {

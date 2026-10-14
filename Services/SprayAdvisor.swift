@@ -143,7 +143,7 @@ final class SprayAdvisor: ObservableObject {
             return
         }
         // 1. ดึงค่าล่าสุดจาก Weather Station ณ ตอนกดปุ่ม
-        let prompt = buildPrompt(obs: store.obs, forecast: store.forecast)
+        let prompt = buildPrompt(obs: store.obs, forecast: store.forecast, source: store.forecastSourceText)
         lastPrompt = prompt
         dataTime = store.obs.obsTimeUtc
         answer = ""
@@ -208,7 +208,7 @@ final class SprayAdvisor: ObservableObject {
     static func thaiTimeText(_ date: Date) -> String { thaiTime.string(from: date) + " น." }
 
     /// รวมค่าจาก Weather Station + แผนการพ่น + พยากรณ์ 6 ชม. เป็นข้อความส่งให้ Gemini
-    private func buildPrompt(obs: PWSObservation, forecast: [OWForecastItem]) -> String {
+    private func buildPrompt(obs: PWSObservation, forecast: [OWForecastItem], source: String) -> String {
         let m = obs.metric
         let dir = obs.winddir.map { "\(WX.degToCompass($0)) (\(Int($0))°)" } ?? "-"
         var lines = [
@@ -238,7 +238,7 @@ final class SprayAdvisor: ObservableObject {
         let now = Date().timeIntervalSince1970
         let upcoming = forecast.filter { $0.dt + 3600 > now }.prefix(6)
         if !upcoming.isEmpty {
-            lines += ["", "พยากรณ์รายชั่วโมงข้างหน้า:"]
+            lines += ["", "พยากรณ์รายชั่วโมงข้างหน้า (\(source)):"]
             for h in upcoming {
                 let t = Self.thaiTimeText(Date(timeIntervalSince1970: h.dt))
                 lines.append("- \(t) \(WX.fmt(h.temp)) °C, ความชื้น \(WX.fmtInt(h.humidity)) %, "

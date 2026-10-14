@@ -18,12 +18,18 @@ final class WeatherStore: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var isLoading = false
     @Published var tab: Tab = .dashboard
+    /// ค่าปรับแก้พยากรณ์จากเซนเซอร์ (nil = ปิดอยู่ หรือข้อมูลย้อนหลังยังไม่พอ)
+    @Published var correction: SensorCorrection?
+    /// ส่วนต่างเซนเซอร์ − พยากรณ์ ณ ตอนนี้ ที่ใช้ยึดชั่วโมงแรก ๆ (nil = ไม่ได้ใช้)
+    @Published var nowcast: Nowcast.Anchor?
 
     let config: AppConfig
     private let service: WeatherService
     private var refreshTask: Task<Void, Never>?
     private let logger = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "store")
     private var refreshCount = 0
+    private var history: [PWSHourlyObs] = []
+    private var historyFetchedAt: Date?
 
     init(config: AppConfig = AppConfig.load()) {
         self.config = config
@@ -59,11 +65,26 @@ final class WeatherStore: ObservableObject {
             stationOffline = false
             obsError = msg
         }
-        forecast = f.0
+        if config.sensorCorrection {
+            await refreshHistoryIfNeeded()
+            let c = SensorCorrection.compute(past: f.past, history: history)
+            if c != correction {
+                logger.log("ค่าปรับแก้พยากรณ์จากเซนเซอร์: \(c?.summary ?? "ข้อมูลไม่พอ", privacy: .public) (\(c?.pairedHours ?? 0, privacy: .public) ชม.)")
+            }
+            correction = c
+        } else {
+            correction = nil
+        }
+        let corrected = correction?.apply(f.upcoming) ?? f.upcoming
+        if config.sensorCorrection && !stationOffline {
+            (forecast, nowcast) = Nowcast.anchor(corrected, obs: obs)
+        } else {
+            (forecast, nowcast) = (corrected, nil)
+        }
         air = a.0
 
         // รวม error แบบเดียวกับ Python: obs มาก่อน แล้ว forecast แล้ว aqi
-        let errors = [obsError, f.1, a.1].filter { !$0.isEmpty }
+        let errors = [obsError, f.error, a.1].filter { !$0.isEmpty }
         errorMessage = errors.joined(separator: " • ")
         if errors.isEmpty {
             // log ค่าจริงที่ได้รับ + เลขกำกับรอบ (กันข้อความซ้ำถูกยุบโดย unified log)
@@ -79,6 +100,30 @@ final class WeatherStore: ObservableObject {
         } else {
             logger.error("refresh มี error: \(self.errorMessage, privacy: .public)")
         }
+    }
+
+    /// ประวัติรายชั่วโมงของสถานีเปลี่ยนชั่วโมงละครั้ง — ดึงใหม่เมื่อเก่ากว่า 1 ชม.
+    private func refreshHistoryIfNeeded() async {
+        if let t = historyFetchedAt, Date().timeIntervalSince(t) < 3600, !history.isEmpty { return }
+        let (rows, err) = await service.fetchHourlyHistory()
+        if err.isEmpty, !rows.isEmpty {
+            history = rows
+            historyFetchedAt = Date()
+        } else if !err.isEmpty {
+            logger.error("ดึงประวัติรายชั่วโมงไม่ได้: \(err, privacy: .public)")
+        }
+    }
+
+    /// ที่มาของพยากรณ์ สำหรับแสดงบนจอ/ส่งให้ Gemini เช่น "UKMO • ปรับด้วยเซนเซอร์: ความชื้น +6% • ลม ×0.45"
+    var forecastSourceText: String {
+        let names = ["ukmo_seamless": "UKMO", "icon_seamless": "ICON", "gfs_seamless": "GFS",
+                     "ecmwf_ifs025": "ECMWF", "gem_seamless": "GEM", "jma_seamless": "JMA",
+                     "meteofrance_seamless": "Météo-France", "cma_grapes_global": "CMA", "best_match": "Best match", "": "Best match"]
+        let model = names[config.forecastModel] ?? config.forecastModel
+        var parts = [model]
+        if let c = correction { parts.append("ปรับด้วยเซนเซอร์: \(c.summary)") }
+        if let e = nowcast?.tempError { parts.append(String(format: "ตอนนี้ต่างจากโมเดล %+.1f°", e)) }
+        return parts.joined(separator: " • ")
     }
 
     /// เริ่ม auto-refresh loop (เรียกจาก .task ของ view)

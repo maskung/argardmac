@@ -10,6 +10,11 @@ struct AppConfig {
     var latitude: Double = 12.701
     var longitude: Double = 102.231
     var refreshSeconds: Int = 60
+    /// โมเดลพยากรณ์ของ Open-Meteo — icon_seamless แม่นสุดที่พิกัดสวน
+    /// (ทดสอบย้อนหลัง 15 ก.ค.–13 ต.ค. 2026 เทียบ 9 โมเดล) / เว้นว่างหรือ best_match = ให้ Open-Meteo เลือกเอง
+    var forecastModel: String = "icon_seamless"
+    /// ปรับอุณหภูมิ/ความชื้น/ลมของพยากรณ์ด้วยค่าจริงจากเซนเซอร์
+    var sensorCorrection: Bool = true
     var geminiAPIKey: String = ""
     var geminiModel: String = "gemini-3.8-flash"
 
@@ -50,6 +55,12 @@ struct AppConfig {
         [General]
         REFRESH_SECONDS = 60
 
+        [Forecast]
+        # โมเดลพยากรณ์ Open-Meteo เช่น ukmo_seamless, icon_seamless, gfs_seamless, best_match
+        MODEL = icon_seamless
+        # ปรับอุณหภูมิ/ความชื้น/ลมของพยากรณ์ด้วยค่าจริงจากเซนเซอร์ (on/off)
+        SENSOR_CORRECTION = on
+
         [Gemini]
         # ขอ key ฟรีที่ https://aistudio.google.com/apikey (หรือใส่ผ่านแท็บ Agriculture)
         API_KEY =
@@ -78,6 +89,9 @@ struct AppConfig {
             case ("openweather", "LATITUDE"): cfg.latitude = Double(value) ?? cfg.latitude
             case ("openweather", "LONGITUDE"): cfg.longitude = Double(value) ?? cfg.longitude
             case ("general", "REFRESH_SECONDS"): cfg.refreshSeconds = Int(value) ?? cfg.refreshSeconds
+            case ("forecast", "MODEL"): cfg.forecastModel = value
+            case ("forecast", "SENSOR_CORRECTION"):
+                cfg.sensorCorrection = !["off", "false", "no", "0"].contains(value.lowercased())
             case ("gemini", "API_KEY"): cfg.geminiAPIKey = value
             case ("gemini", "MODEL"): cfg.geminiModel = value.isEmpty ? cfg.geminiModel : value
             default: break

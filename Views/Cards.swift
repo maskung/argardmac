@@ -33,7 +33,7 @@ struct HeroCard: View {
 
         let m = store.obs.metric
         let feel = WX.feeling(m.heatIndex)
-        let emoji = store.forecast.first.map { WX.weatherEmoji($0.weatherIcon) } ?? "🌤️"
+        let weatherIcon = store.forecast.first?.weatherIcon ?? "02d"
         let moon = MoonInfo.calculate()
 
         return HStack(alignment: .center, spacing: 20) {
@@ -77,8 +77,7 @@ struct HeroCard: View {
             // เริ่ม 86 → 172 (ใหญ่ไป) → 138 → ลดอีก 20% เหลือ 110 (ผู้ใช้ขอ)
             // พร้อมคำพยากรณ์ชั่วโมงแรกใต้ไอคอน (เช่น "Clear Sky", "Light Rain")
             VStack(spacing: 2) {
-                Text(emoji)
-                    .font(.system(size: 110))
+                WeatherIconView(icon: weatherIcon, size: 110)
                     .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
                 if let desc = store.forecast.first?.weatherDesc, !desc.isEmpty {
                     Text(desc)
