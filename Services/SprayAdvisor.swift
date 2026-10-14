@@ -74,6 +74,7 @@ final class SprayAdvisor: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var answer = ""
     @Published private(set) var errorText = ""
+    @Published private(set) var retryNote = ""      // ข้อความระหว่างลองส่งใหม่ (Gemini ไม่ว่าง)
     @Published private(set) var lastPrompt = ""
     @Published private(set) var dataTime: Date?     // เวลาที่สถานีวัดค่าที่ส่งไป
     @Published private(set) var askedAt: Date?
@@ -144,16 +145,27 @@ final class SprayAdvisor: ObservableObject {
 
         // 2. ส่ง prompt + ค่าอากาศไปให้ Gemini
         logger.log("ส่งให้ Gemini model=\(self.model, privacy: .public) crop=\(self.cropName, privacy: .public) spray=\(self.selectedSprays.map(\.rawValue).joined(separator: ","), privacy: .public)")
-        do {
-            let text = try await GeminiService(apiKey: apiKey, model: model)
-                .generate(system: systemInstruction, prompt: prompt, temperature: 0.3)
-            // 3. เก็บคำตอบไว้แสดงบนหน้าจอ
-            answer = text
-            askedAt = Date()
-            logger.log("Gemini ตอบกลับ \(text.count, privacy: .public) ตัวอักษร")
-        } catch {
-            errorText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            logger.error("Gemini ผิดพลาด: \(self.errorText, privacy: .public)")
+        // Gemini ไม่ว่างชั่วคราว (503 ฯลฯ) → ลองใหม่เองสูงสุด 3 ครั้ง เว้น 2, 4, 8 วิ
+        let gemini = GeminiService(apiKey: apiKey, model: model)
+        let retryDelays: [UInt64] = [2, 4, 8]
+        defer { retryNote = "" }
+        for attempt in 0...retryDelays.count {
+            do {
+                let text = try await gemini.generate(system: systemInstruction, prompt: prompt, temperature: 0.3)
+                // 3. เก็บคำตอบไว้แสดงบนหน้าจอ
+                answer = text
+                askedAt = Date()
+                logger.log("Gemini ตอบกลับ \(text.count, privacy: .public) ตัวอักษร (ครั้งที่ \(attempt + 1, privacy: .public))")
+                return
+            } catch let error as GeminiService.GeminiError where error.isRetryable && attempt < retryDelays.count {
+                retryNote = "Gemini มีคนใช้เยอะ กำลังลองใหม่ (ครั้งที่ \(attempt + 2)/\(retryDelays.count + 1))..."
+                logger.log("Gemini ไม่ว่าง ลองใหม่ใน \(retryDelays[attempt], privacy: .public) วิ: \(error.errorDescription ?? "", privacy: .public)")
+                try? await Task.sleep(nanoseconds: retryDelays[attempt] * 1_000_000_000)
+            } catch {
+                errorText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                logger.error("Gemini ผิดพลาด: \(self.errorText, privacy: .public)")
+                return
+            }
         }
     }
 

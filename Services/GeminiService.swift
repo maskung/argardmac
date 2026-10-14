@@ -11,6 +11,13 @@ struct GeminiService {
         case http(Int, String)
         case empty(String?)
 
+        /// เซิร์ฟเวอร์ไม่ว่าง/ล่มชั่วคราว — ลองส่งใหม่แล้วมักผ่าน
+        /// (503 "high demand" เจอบ่อยกับคำขอแรก ๆ)
+        var isRetryable: Bool {
+            if case .http(let code, _) = self { return [500, 502, 503, 504].contains(code) }
+            return false
+        }
+
         var errorDescription: String? {
             switch self {
             case .http(400, let msg) where msg.contains("API key"):

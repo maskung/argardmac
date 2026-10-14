@@ -227,8 +227,9 @@ struct AgricultureView: View {
             if advisor.isLoading {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("กำลังส่งข้อมูลสถานีให้ Gemini วิเคราะห์...")
-                        .foregroundStyle(.white.opacity(0.7))
+                    Text(advisor.retryNote.isEmpty ? "กำลังส่งข้อมูลสถานีให้ Gemini วิเคราะห์..."
+                                                   : advisor.retryNote)
+                        .foregroundStyle(advisor.retryNote.isEmpty ? .white.opacity(0.7) : .orange)
                 }
                 .font(.system(size: 13))
                 .padding(.vertical, 20)
