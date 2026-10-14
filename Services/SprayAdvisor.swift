@@ -9,7 +9,7 @@ import os
 final class SprayAdvisor: ObservableObject {
 
     enum SprayType: String, CaseIterable, Identifiable {
-        case insecticide, fungicide, foliar, herbicide
+        case insecticide, fungicide, foliar, herbicide, soil
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -17,15 +17,19 @@ final class SprayAdvisor: ObservableObject {
             case .fungicide: "ยาเชื้อรา"
             case .foliar: "ปุ๋ยทางใบ"
             case .herbicide: "ยาฆ่าหญ้า"
+            case .soil: "ปุ๋ยทางดิน"
             }
         }
-        /// ชื่อเต็มที่ใช้ใน prompt
+        /// งานนี้เป็นการพ่น (ปุ๋ยทางดินคือหว่าน/ใส่โคนต้น ไม่ใช่การพ่น)
+        var isSpray: Bool { self != .soil }
+        /// ชื่องานเต็มที่ใช้ใน prompt
         var promptName: String {
             switch self {
-            case .insecticide: "ยาฆ่าแมลง"
-            case .fungicide: "ยาป้องกันกำจัดเชื้อรา"
-            case .foliar: "ปุ๋ยทางใบ/ฮอร์โมน"
-            case .herbicide: "ยาฆ่าหญ้า"
+            case .insecticide: "พ่นยาฆ่าแมลง"
+            case .fungicide: "พ่นยาป้องกันกำจัดเชื้อรา"
+            case .foliar: "พ่นปุ๋ยทางใบ/ฮอร์โมน"
+            case .herbicide: "พ่นยาฆ่าหญ้า"
+            case .soil: "ใส่ปุ๋ยทางดิน (หว่าน/ใส่โคนต้น)"
             }
         }
     }
@@ -42,9 +46,9 @@ final class SprayAdvisor: ObservableObject {
         }
         var promptText: String {
             switch self {
-            case .now: "ตั้งใจจะพ่นทันที"
-            case .within3h: "ตั้งใจจะพ่นภายใน 3 ชั่วโมงข้างหน้า"
-            case .within6h: "ตั้งใจจะพ่นภายใน 6 ชั่วโมงข้างหน้า"
+            case .now: "ตั้งใจจะทำทันที"
+            case .within3h: "ตั้งใจจะทำภายใน 3 ชั่วโมงข้างหน้า"
+            case .within6h: "ตั้งใจจะทำภายใน 6 ชั่วโมงข้างหน้า"
             }
         }
     }
@@ -98,10 +102,14 @@ final class SprayAdvisor: ObservableObject {
     /// สารที่เลือก เรียงตามลำดับบนหน้าจอ
     var selectedSprays: [SprayType] { SprayType.allCases.filter(sprayTypes.contains) }
 
-    /// ข้อความต่อท้าย "วิเคราะห์อากาศเพื่อการพ่น…" บนปุ่ม
-    var sprayButtonText: String {
+    /// ข้อความบนปุ่มวิเคราะห์ — เลือกอย่างเดียวบอกชื่องาน หลายอย่างบอกจำนวน
+    var analyzeButtonTitle: String {
         let s = selectedSprays
-        return s.count == 1 ? s[0].label : "ยา (\(s.count) อย่าง)"
+        if s.count == 1 {
+            return "วิเคราะห์อากาศเพื่อการ" + (s[0].isSpray ? "พ่น\(s[0].label)" : "ใส่\(s[0].label)")
+        }
+        let work = s.allSatisfy(\.isSpray) ? "พ่นยา" : "พ่นยาและใส่ปุ๋ย"
+        return "วิเคราะห์อากาศเพื่อการ\(work) (\(s.count) อย่าง)"
     }
 
     private var sprayPromptNames: String { selectedSprays.map(\.promptName).joined(separator: " และ ") }
@@ -131,7 +139,7 @@ final class SprayAdvisor: ObservableObject {
             return
         }
         guard !sprayTypes.isEmpty else {
-            errorText = "เลือกสารที่จะพ่นอย่างน้อย 1 อย่าง"
+            errorText = "เลือกสิ่งที่จะทำอย่างน้อย 1 อย่าง"
             return
         }
         // 1. ดึงค่าล่าสุดจาก Weather Station ณ ตอนกดปุ่ม
@@ -174,13 +182,15 @@ final class SprayAdvisor: ObservableObject {
         """
         คุณเป็นผู้เชี่ยวชาญด้านการทำสวน\(cropName)
         หน้าที่ของคุณคือ วิเคราะห์ค่าสภาพอากาศจาก Weather Station แล้วประเมินว่า \
-        'เหมาะกับการพ่น\(sprayPromptNames)ให้\(cropName)หรือไม่'
+        'เหมาะกับการ\(sprayPromptNames)ให้\(cropName)หรือไม่'
         พร้อมให้เหตุผลสั้นๆ เข้าใจง่าย สไตล์ชาวสวน
-        ถ้าจะพ่นหลายอย่าง ให้ระบุว่าสภาพอากาศตอนนี้เหมาะกับสารแต่ละอย่างหรือไม่ \
+        ถ้าทำหลายอย่าง ให้ระบุว่าสภาพอากาศตอนนี้เหมาะกับแต่ละอย่างหรือไม่ \
         (บางอย่างอาจเหมาะ บางอย่างอาจไม่เหมาะ)
+        สำหรับการใส่ปุ๋ยทางดิน ให้พิจารณาความชื้นดิน ฝนที่ตกมาแล้วและที่จะตก \
+        (ฝนเล็กน้อยช่วยละลายปุ๋ยลงดิน ฝนหนักชะล้างปุ๋ยทิ้ง) และความร้อนที่ทำให้ปุ๋ยระเหย
 
         รูปแบบคำตอบ:
-        - บรรทัดแรกขึ้นต้นด้วย ✅ (เหมาะ) หรือ ⚠️ (พ่นได้แต่ต้องระวัง) หรือ ❌ (ไม่ควรพ่น) \
+        - บรรทัดแรกขึ้นต้นด้วย ✅ (เหมาะ) หรือ ⚠️ (ทำได้แต่ต้องระวัง) หรือ ❌ (ไม่ควรทำ) \
         ตามด้วยสรุปหนึ่งประโยค
         - เหตุผลเป็นข้อๆ ไม่เกิน 5 ข้อ อ้างอิงตัวเลขจากสถานี
         - ถ้ายังไม่เหมาะ ให้แนะนำช่วงเวลาที่ดีกว่าจากพยากรณ์รายชั่วโมงที่ให้มา
@@ -217,8 +227,8 @@ final class SprayAdvisor: ObservableObject {
             "- ค่า UV Index: \(WX.fmtInt(obs.uv))",
             "- เวลาที่วัด: \(Self.thaiTimeText(obs.obsTimeUtc ?? Date()))",
             "",
-            "แผนการพ่น:",
-            "- สารที่จะพ่น: \(sprayPromptNames)",
+            "แผนงาน:",
+            "- สิ่งที่จะทำ: \(sprayPromptNames)",
             "- ช่วงเวลา: \(timing.promptText)",
         ]
         let n = note.trimmingCharacters(in: .whitespacesAndNewlines)

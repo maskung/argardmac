@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// หน้า Agriculture — วิเคราะห์อากาศเพื่อการพ่นยาด้วย Gemini
-/// ซ้าย: ค่าจากสถานีที่จะส่งไป + รายละเอียดการพ่น + ปุ่มวิเคราะห์ / ขวา: คำตอบจาก Gemini
+/// ซ้าย: ค่าจากสถานีที่จะส่งไป + รายละเอียดการพ่น/ใส่ปุ๋ย + ปุ่มวิเคราะห์ / ขวา: คำตอบจาก Gemini
 struct AgricultureView: View {
     @ObservedObject var store: WeatherStore
     @ObservedObject var advisor: SprayAdvisor
@@ -14,7 +14,7 @@ struct AgricultureView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("AGRICULTURE AI • วิเคราะห์อากาศเพื่อการพ่นยา")
+                Text("AGRICULTURE AI • วิเคราะห์อากาศเพื่อการพ่นยาและใส่ปุ๋ย")
                     .font(.system(size: 11, weight: .semibold))
                     .kerning(1.5)
                     .foregroundStyle(Theme.textGold)
@@ -83,7 +83,7 @@ struct AgricultureView: View {
     // MARK: - รายละเอียดการพ่น
 
     private var planCard: some View {
-        Card(title: "รายละเอียดการพ่น", systemIcon: "leaf.fill",
+        Card(title: "รายละเอียดการพ่น / ใส่ปุ๋ย", systemIcon: "leaf.fill",
              accent: Theme.breeze, minHeight: 0) {
             field("พืช") {
                 HStack(spacing: 8) {
@@ -100,8 +100,9 @@ struct AgricultureView: View {
                     }
                 }
             }
-            field("สารที่จะพ่น (เลือกได้หลายอย่าง)") {
-                HStack(spacing: 16) {
+            field("สิ่งที่จะทำ (เลือกได้หลายอย่าง)") {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3),
+                          alignment: .leading, spacing: 8) {
                     ForEach(SprayAdvisor.SprayType.allCases) { type in
                         Toggle(type.label, isOn: sprayBinding(type))
                             .toggleStyle(.checkbox)
@@ -114,7 +115,7 @@ struct AgricultureView: View {
                         .foregroundStyle(.orange)
                 }
             }
-            field("จะพ่นเมื่อไร") {
+            field("จะทำเมื่อไร") {
                 Picker("", selection: $advisor.timing) {
                     ForEach(SprayAdvisor.Timing.allCases) { Text($0.label).tag($0) }
                 }
@@ -159,7 +160,7 @@ struct AgricultureView: View {
                     Image(systemName: "sparkles")
                 }
                 Text(advisor.isLoading ? "Gemini กำลังวิเคราะห์..."
-                                       : "วิเคราะห์อากาศเพื่อการพ่น\(advisor.sprayButtonText)")
+                                       : advisor.analyzeButtonTitle)
             }
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(.white)
@@ -275,10 +276,10 @@ struct AgricultureView: View {
             Image(systemName: "leaf.circle")
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(Theme.mintG)
-            Text("กดปุ่ม \"วิเคราะห์อากาศเพื่อการพ่น\(advisor.sprayButtonText)\"")
+            Text("กดปุ่ม \"\(advisor.analyzeButtonTitle)\"")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
-            Text("Gemini จะประเมินจากค่าสถานีล่าสุดว่าตอนนี้เหมาะจะพ่นหรือไม่ พร้อมเหตุผล")
+            Text("Gemini จะประเมินจากค่าสถานีล่าสุดว่าตอนนี้เหมาะจะพ่นยาหรือใส่ปุ๋ยหรือไม่ พร้อมเหตุผล")
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.5))
         }
@@ -314,9 +315,9 @@ struct AgricultureView: View {
     /// สรุปผลจากสัญลักษณ์บรรทัดแรกที่สั่งให้ Gemini ขึ้นต้นไว้
     private var verdictBadge: String? {
         guard !advisor.isLoading, let first = advisor.answer.split(separator: "\n").first else { return nil }
-        if first.contains("✅") { return "✅ เหมาะพ่น" }
+        if first.contains("✅") { return "✅ เหมาะสม" }
         if first.contains("⚠️") { return "⚠️ ระวัง" }
-        if first.contains("❌") { return "❌ ไม่ควรพ่น" }
+        if first.contains("❌") { return "❌ ไม่ควรทำ" }
         return nil
     }
 }
