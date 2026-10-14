@@ -16,7 +16,7 @@ struct ForecastView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("HOURLY FORECAST • NEXT 12 HOURS")
+                    Text("HOURLY FORECAST • NEXT 10 HOURS")
                         .font(.system(size: 11, weight: .semibold))
                         .kerning(1.5)
                         .foregroundStyle(Theme.textGold)
@@ -26,7 +26,7 @@ struct ForecastView: View {
                         .foregroundStyle(.white.opacity(0.45))
                 }
                 LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(Array(store.forecast.prefix(12).enumerated()), id: \.offset) { _, hour in
+                    ForEach(Array(store.forecast.prefix(10).enumerated()), id: \.offset) { _, hour in
                         ForecastHourCard(hour: hour)
                     }
                 }

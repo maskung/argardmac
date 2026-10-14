@@ -48,7 +48,7 @@ struct HeaderBar: View {
 
             Picker("", selection: $store.tab) {
                 Text("Dashboard").tag(WeatherStore.Tab.dashboard)
-                Text("12h Forecast").tag(WeatherStore.Tab.forecast)
+                Text("10h Forecast").tag(WeatherStore.Tab.forecast)
                 Text("Agriculture AI").tag(WeatherStore.Tab.agriculture)
             }
             .pickerStyle(.segmented)
