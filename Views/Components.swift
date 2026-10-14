@@ -741,14 +741,13 @@ struct AnimatedWeatherIcon: View {
     }
 
     var body: some View {
-        if let drops {
+        if RealisticWeatherIcon.kind(for: icon) != nil {
+            // แบบสมจริงที่วาดเอง (WeatherArt.swift) — ฝน/ฟ้าแลบอยู่ใต้เมฆ
             ZStack {
-                RainLayerView(size: size, drops: drops, thunder: icon.contains("11"))
-                // เมฆนิ่ง วางทับบนสุด (กลาง x, 32% ของความสูงกรอบ)
-                Text("☁️")
-                    .font(.system(size: size * 0.95))
-                    .shadow(color: .black.opacity(0.35), radius: 13, y: 5)
-                    .position(x: size * 1.25 / 2, y: size * 1.2 * 0.32)
+                if let drops {
+                    RainLayerView(size: size, drops: drops, thunder: icon.contains("11"))
+                }
+                RealisticWeatherIcon(icon: icon, size: size)
             }
             .frame(width: size * 1.25, height: size * 1.2)
         } else {
@@ -787,13 +786,14 @@ final class RainNSView: NSView {
         wantsLayer = true
         // แสงสว่างวาบรอบเมฆ (radial ขาว → ใส)
         glow.type = .radial
-        glow.colors = [NSColor.white.withAlphaComponent(0.45).cgColor, NSColor.clear.cgColor]
+        glow.colors = [NSColor(red: 0.62, green: 0.78, blue: 1.0, alpha: 0.95).cgColor,
+                       NSColor(red: 0.40, green: 0.60, blue: 1.0, alpha: 0.35).cgColor, NSColor.clear.cgColor]
         glow.startPoint = CGPoint(x: 0.5, y: 0.5)
         glow.endPoint = CGPoint(x: 1, y: 1)
         glow.opacity = 0
         layer?.addSublayer(glow)
-        // สายฟ้า ⚡ ใต้เมฆ — โผล่เฉพาะตอนแลบ
-        bolt.contents = Self.emojiImage("⚡", fontSize: size * 0.42)
+        // สายฟ้าใต้เมฆ — โผล่เฉพาะตอนแลบ
+        bolt.contents = Self.boltImage(size: size * 0.5)
         bolt.contentsGravity = .resizeAspect
         bolt.opacity = 0
         layer?.addSublayer(bolt)
@@ -837,7 +837,7 @@ final class RainNSView: NSView {
         let scale = window?.backingScaleFactor ?? 2
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let r = w * 0.55
+        let r = w * 0.62
         glow.frame = CGRect(x: w / 2 - r, y: fromTop(h * 0.32 - r * 0.8, height: r * 1.6),
                             width: r * 2, height: r * 1.6)
         let b = size * 0.5
@@ -900,11 +900,26 @@ final class RainNSView: NSView {
         return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
     }
 
-    private static func emojiImage(_ s: String, fontSize: CGFloat) -> CGImage? {
-        let str = NSAttributedString(string: s, attributes: [.font: NSFont.systemFont(ofSize: fontSize)])
-        let sz = str.size()
-        let img = NSImage(size: sz, flipped: false) { _ in str.draw(at: .zero); return true }
-        var rect = NSRect(x: 0, y: 0, width: sz.width * 2, height: sz.height * 2)
+    /// สายฟ้าซิกแซกสีขาว เรืองแสงสีฟ้ารอบ ๆ (จุดยอดวัดจากขอบบน 0…1)
+    private static func boltImage(size b: CGFloat) -> CGImage? {
+        let pts: [(CGFloat, CGFloat)] = [(0.58, 0.00), (0.30, 0.50), (0.47, 0.50), (0.32, 1.00),
+                                        (0.72, 0.40), (0.54, 0.40), (0.70, 0.00)]
+        let img = NSImage(size: NSSize(width: b, height: b), flipped: false) { _ in
+            let p = NSBezierPath()
+            for (i, (x, y)) in pts.enumerated() {
+                let pt = NSPoint(x: b * (0.15 + 0.7 * x), y: b * (1 - (0.08 + 0.84 * y)))
+                i == 0 ? p.move(to: pt) : p.line(to: pt)
+            }
+            p.close()
+            let glow = NSShadow()
+            glow.shadowColor = NSColor(red: 0.45, green: 0.65, blue: 1.0, alpha: 1)
+            glow.shadowBlurRadius = b * 0.10
+            glow.set()
+            NSColor(red: 0.96, green: 0.98, blue: 1.0, alpha: 1).setFill()
+            p.fill()
+            return true
+        }
+        var rect = NSRect(x: 0, y: 0, width: b * 2, height: b * 2)
         return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
     }
 }
