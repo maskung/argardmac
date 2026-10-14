@@ -72,7 +72,10 @@ final class SprayAdvisor: ObservableObject {
 
     // MARK: Gemini
     @Published private(set) var apiKey: String
-    let model: String
+    /// รุ่นที่จะลองตามลำดับ (จาก MODEL ใน config.ini คั่นด้วยจุลภาค)
+    let models: [String]
+    /// รุ่นหลัก (ตัวแรกของลำดับ)
+    var model: String { models.first ?? "" }
 
     // MARK: ผลลัพธ์
     @Published private(set) var isLoading = false
@@ -82,6 +85,7 @@ final class SprayAdvisor: ObservableObject {
     @Published private(set) var lastPrompt = ""
     @Published private(set) var dataTime: Date?     // เวลาที่สถานีวัดค่าที่ส่งไป
     @Published private(set) var askedAt: Date?
+    @Published private(set) var answeredModel: String?   // รุ่นที่ตอบจริง (อาจเป็นรุ่นสำรอง)
 
     private let logger = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "gemini")
 
@@ -96,7 +100,8 @@ final class SprayAdvisor: ObservableObject {
             sprayTypes = [d.string(forKey: "agri.sprayType").flatMap(SprayType.init(rawValue:)) ?? .insecticide]
         }
         apiKey = config.geminiAPIKey
-        model = config.geminiModel
+        models = config.geminiModel.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
     /// สารที่เลือก เรียงตามลำดับบนหน้าจอ
@@ -152,29 +157,43 @@ final class SprayAdvisor: ObservableObject {
         defer { isLoading = false }
 
         // 2. ส่ง prompt + ค่าอากาศไปให้ Gemini
-        logger.log("ส่งให้ Gemini model=\(self.model, privacy: .public) crop=\(self.cropName, privacy: .public) spray=\(self.selectedSprays.map(\.rawValue).joined(separator: ","), privacy: .public)")
-        // Gemini ไม่ว่างชั่วคราว (503 ฯลฯ) → ลองใหม่เองสูงสุด 3 ครั้ง เว้น 2, 4, 8 วิ
-        let gemini = GeminiService(apiKey: apiKey, model: model)
-        let retryDelays: [UInt64] = [2, 4, 8]
+        logger.log("ส่งให้ Gemini models=\(self.models.joined(separator: ","), privacy: .public) crop=\(self.cropName, privacy: .public) spray=\(self.selectedSprays.map(\.rawValue).joined(separator: ","), privacy: .public)")
+        // ไล่รุ่นตามลำดับ: รุ่นไหนไม่ว่าง/โควต้าหมด/timeout → สลับรุ่นถัดไปทันที (แต่ละรุ่นมีโควต้าแยก)
+        // ไล่ครบแล้วยังไม่ได้ → รอ 5 วิ ไล่อีกรอบเดียว (เดิมส่งซ้ำรุ่นเดียว 4 ครั้ง เผาโควต้าจนหมด)
         defer { retryNote = "" }
-        for attempt in 0...retryDelays.count {
-            do {
-                let text = try await gemini.generate(system: systemInstruction, prompt: prompt, temperature: 0.3)
-                // 3. เก็บคำตอบไว้แสดงบนหน้าจอ
-                answer = text
-                askedAt = Date()
-                logger.log("Gemini ตอบกลับ \(text.count, privacy: .public) ตัวอักษร (ครั้งที่ \(attempt + 1, privacy: .public))")
-                return
-            } catch let error as GeminiService.GeminiError where error.isRetryable && attempt < retryDelays.count {
-                retryNote = "Gemini มีคนใช้เยอะ กำลังลองใหม่ (ครั้งที่ \(attempt + 2)/\(retryDelays.count + 1))..."
-                logger.log("Gemini ไม่ว่าง ลองใหม่ใน \(retryDelays[attempt], privacy: .public) วิ: \(error.errorDescription ?? "", privacy: .public)")
-                try? await Task.sleep(nanoseconds: retryDelays[attempt] * 1_000_000_000)
-            } catch {
-                errorText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                logger.error("Gemini ผิดพลาด: \(self.errorText, privacy: .public)")
-                return
+        var lastError = ""
+        for pass in 0..<2 {
+            if pass == 1 {
+                retryNote = "ทุกรุ่นไม่ว่าง รอสักครู่แล้วลองอีกรอบ..."
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+            for (i, m) in models.enumerated() {
+                if i > 0 { retryNote = "\(models[i - 1]) ไม่ว่าง กำลังลอง \(m)..." }
+                do {
+                    let text = try await GeminiService(apiKey: apiKey, model: m)
+                        .generate(system: systemInstruction, prompt: prompt, temperature: 0.3)
+                    // 3. เก็บคำตอบไว้แสดงบนหน้าจอ
+                    answer = text
+                    answeredModel = m
+                    askedAt = Date()
+                    logger.log("Gemini ตอบกลับ \(text.count, privacy: .public) ตัวอักษร จาก \(m, privacy: .public)")
+                    return
+                } catch let error as GeminiService.GeminiError where error.shouldTryNextModel {
+                    lastError = error.errorDescription ?? ""
+                    logger.log("\(m, privacy: .public) ใช้ไม่ได้ ข้ามไปรุ่นถัดไป: \(lastError, privacy: .public)")
+                } catch let error as URLError {
+                    lastError = error.localizedDescription        // timeout / เน็ตหลุดชั่วคราว
+                    logger.log("\(m, privacy: .public) เชื่อมต่อไม่ได้ ข้ามไปรุ่นถัดไป: \(lastError, privacy: .public)")
+                } catch {
+                    // key ผิด ฯลฯ — สลับรุ่นก็ไม่ช่วย
+                    errorText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    logger.error("Gemini ผิดพลาด: \(self.errorText, privacy: .public)")
+                    return
+                }
             }
         }
+        errorText = "ทุกรุ่นไม่ว่างหรือโควต้าหมด ลองใหม่อีกสักครู่ (ล่าสุด: \(lastError))"
+        logger.error("Gemini ผิดพลาด: \(self.errorText, privacy: .public)")
     }
 
     /// บทบาทของ AI — ผู้เชี่ยวชาญสวน ตอบสั้น เข้าใจง่าย สไตล์ชาวสวน

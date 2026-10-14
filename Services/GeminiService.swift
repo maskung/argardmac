@@ -11,11 +11,13 @@ struct GeminiService {
         case http(Int, String)
         case empty(String?)
 
-        /// เซิร์ฟเวอร์ไม่ว่าง/ล่มชั่วคราว — ลองส่งใหม่แล้วมักผ่าน
-        /// (503 "high demand" เจอบ่อยกับคำขอแรก ๆ)
-        var isRetryable: Bool {
-            if case .http(let code, _) = self { return [500, 502, 503, 504].contains(code) }
-            return false
+        /// รุ่นนี้ใช้ไม่ได้ตอนนี้ แต่รุ่นอื่นน่าจะได้ — ไม่ว่าง (5xx), โควต้าของรุ่นนี้หมด (429),
+        /// รุ่นถูกปิด (404) หรือไม่ส่งคำตอบมา / key ผิด (400, 403) สลับรุ่นก็ไม่ช่วย
+        var shouldTryNextModel: Bool {
+            switch self {
+            case .http(let code, _): return [404, 429, 500, 502, 503, 504].contains(code)
+            case .empty: return true
+            }
         }
 
         var errorDescription: String? {

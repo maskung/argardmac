@@ -16,7 +16,9 @@ struct AppConfig {
     /// ปรับอุณหภูมิ/ความชื้น/ลมของพยากรณ์ด้วยค่าจริงจากเซนเซอร์
     var sensorCorrection: Bool = true
     var geminiAPIKey: String = ""
-    var geminiModel: String = "gemini-3.8-flash"
+    /// รุ่น Gemini เรียงตามลำดับที่จะลอง (คั่นด้วยจุลภาค) — รุ่นแรกไม่ว่าง/โควต้าหมด จะสลับไปรุ่นถัดไป
+    /// (ทดสอบ 15 ต.ค. 2026: รุ่นเดียวตอบ 503 ติดกันทั้งช่วงเช้า แต่รุ่นอื่นยังตอบได้)
+    var geminiModel: String = "gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-flash-lite, gemma-4-26b-a4b-it"
 
     static let supportDir = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -64,7 +66,8 @@ struct AppConfig {
         [Gemini]
         # ขอ key ฟรีที่ https://aistudio.google.com/apikey (หรือใส่ผ่านแท็บ Agriculture)
         API_KEY =
-        MODEL = gemini-3.8-flash
+        # ใส่ได้หลายรุ่นคั่นด้วยจุลภาค — รุ่นแรกไม่ว่างจะลองรุ่นถัดไป
+        MODEL = gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-flash-lite, gemma-4-26b-a4b-it
         """
     }
 
@@ -120,7 +123,7 @@ struct AppConfig {
             }
         } else {
             if let last = lines.last, !last.trimmingCharacters(in: .whitespaces).isEmpty { lines.append("") }
-            lines += ["[Gemini]", newLine, "MODEL = gemini-3.8-flash"]
+            lines += ["[Gemini]", newLine, "MODEL = gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-flash-lite, gemma-4-26b-a4b-it"]
         }
         try lines.joined(separator: "\n").write(to: configURL, atomically: true, encoding: .utf8)
     }

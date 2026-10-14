@@ -207,7 +207,8 @@ struct AgricultureView: View {
     private var keyStatusRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-            Text("Gemini API key พร้อมใช้ • \(advisor.model)")
+            Text("Gemini API key พร้อมใช้ • \(advisor.model)"
+                 + (advisor.models.count > 1 ? " (+ สำรอง \(advisor.models.count - 1) รุ่น)" : ""))
                 .foregroundStyle(.white.opacity(0.55))
             Spacer()
             Button("เปลี่ยน key") { editingKey = true }
@@ -297,7 +298,7 @@ struct AgricultureView: View {
                 if let t = advisor.askedAt {
                     Text("• วิเคราะห์ \(SprayAdvisor.thaiTimeText(t))")
                 }
-                Text("• \(advisor.model)")
+                Text("• \(advisor.answeredModel ?? advisor.model)")
             }
             .foregroundStyle(.white.opacity(0.45))
             Spacer()
