@@ -72,15 +72,24 @@ struct WeatherService {
 
     // MARK: Fetch
 
-    func fetchObservation() async -> (PWSObservation, String) {
-        guard let url = observationURL else { return (PWSObservation(), "Bad URL") }
+    enum ObservationResult {
+        case ok(PWSObservation)
+        case offline            // สถานีไม่ส่งข้อมูลขึ้น cloud เกิน ~30 นาที
+        case failed(String)
+    }
+
+    func fetchObservation() async -> ObservationResult {
+        guard let url = observationURL else { return .failed("Bad URL") }
         do {
             let data = try await get(url)
+            // weather.com ตอบ HTTP 204 ตัวเปล่าเมื่อสถานีไม่มีข้อมูลเกิน ~30 นาที
+            // (เดิมเอาไป decode เป็น JSON แล้วได้ error "data couldn't be read")
+            if data.isEmpty { return .offline }
             let resp = try JSONDecoder().decode(PWSObservationResponse.self, from: data)
-            if let obs = resp.observations?.first { return (obs, "") }
-            return (PWSObservation(), "No observations")
+            if let obs = resp.observations?.first { return .ok(obs) }
+            return .offline
         } catch {
-            return (PWSObservation(), errMsg(error))
+            return .failed(errMsg(error))
         }
     }
 

@@ -13,6 +13,8 @@ final class WeatherStore: ObservableObject {
     @Published var forecast: [OWForecastItem] = []
     @Published var air = AQCurrent()
     @Published var errorMessage = ""
+    /// สถานีไม่ส่งข้อมูลขึ้น cloud เกิน ~30 นาที — obs ยังเป็นค่าล่าสุดที่เคยได้ (ถ้ามี)
+    @Published var stationOffline = false
     @Published var lastUpdated: Date?
     @Published var isLoading = false
     @Published var tab: Tab = .dashboard
@@ -43,12 +45,25 @@ final class WeatherStore: ObservableObject {
         async let airResult = service.fetchAirQuality()
 
         let (o, f, a) = await (obsResult, forecastResult, airResult)
-        obs = o.0
+        var obsError = ""
+        switch o {
+        case .ok(let fresh):
+            obs = fresh
+            stationOffline = false
+        case .offline:
+            // ไม่ใช่ error — คงค่าล่าสุดไว้บนจอ แล้วให้ header ขึ้น OFFLINE แทน
+            if !stationOffline { logger.log("สถานี offline (weather.com ไม่มีข้อมูลเกิน 30 นาที)") }
+            stationOffline = true
+        case .failed(let msg):
+            obs = PWSObservation()
+            stationOffline = false
+            obsError = msg
+        }
         forecast = f.0
         air = a.0
 
         // รวม error แบบเดียวกับ Python: obs มาก่อน แล้ว forecast แล้ว aqi
-        let errors = [o.1, f.1, a.1].filter { !$0.isEmpty }
+        let errors = [obsError, f.1, a.1].filter { !$0.isEmpty }
         errorMessage = errors.joined(separator: " • ")
         if errors.isEmpty {
             // log ค่าจริงที่ได้รับ + เลขกำกับรอบ (กันข้อความซ้ำถูกยุบโดย unified log)

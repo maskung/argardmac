@@ -24,14 +24,14 @@ struct HeaderBar: View {
                         .background(.white.opacity(0.08), in: Capsule())
                         .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
                 }
-                if !store.obs.obsTimeLocal.isEmpty {
+                if !store.obs.obsTimeLocal.isEmpty || store.stationOffline {
                     // "Cloud" แทน "Obs" — ชี้ว่าเป็นข้อมูลจากคลาวด์ weather.com ซึ่งบางทีแคชชุดเดิมไว้ ไม่ใช่เรียลไทม์เสมอ
                     // พร้อม pill บอกอายุข้อมูลเทียบเวลาปัจจุบัน (เขียว=สด เหลือง=หลังแล้วนิดหน่อย แดง=ล้าหลังมาก)
                     HStack(spacing: 6) {
-                        Text("Station \(store.config.stationID) • Cloud \(store.obs.obsTimeLocal)")
+                        Text("Station \(store.config.stationID) • Cloud \(store.obs.obsTimeLocal.isEmpty ? "no data" : store.obs.obsTimeLocal)")
                             .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.5))
-                        CloudStatusPill(obsTime: store.obs.obsTimeUtc)
+                        CloudStatusPill(obsTime: store.obs.obsTimeUtc, offline: store.stationOffline)
                     }
                 }
             }
@@ -88,12 +88,16 @@ struct HeaderBar: View {
 /// ขับด้วย TimelineView ของตัวเอง อายุจะวิ่งสดทุกวินาทีแม้ header ไม่ render ใหม่
 struct CloudStatusPill: View {
     let obsTime: Date?
+    /// weather.com ไม่มีข้อมูลสถานีเกิน ~30 นาที (ตอบ 204)
+    var offline = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let age = obsTime.map { context.date.timeIntervalSince($0) } ?? -1
-            let color: Color = age < 0 ? .gray : (age <= 180 ? .green : (age <= 600 ? .yellow : .red))
+            let color: Color = offline ? .red
+                : age < 0 ? .gray : (age <= 180 ? .green : (age <= 600 ? .yellow : .red))
             let text: String = {
+                if offline { return "DEVICE OFFLINE" }
                 if age < 0 { return "—" }
                 if age <= 180 { return "LIVE" }
                 return "+\(Int(age / 60)) min"

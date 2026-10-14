@@ -66,9 +66,17 @@ struct AgricultureView: View {
                     StatTile(label: tile.0, value: tile.1)
                 }
             }
-            Text("ส่งค่าเหล่านี้ + UV + ความกดอากาศ + พยากรณ์ 6 ชม.ข้างหน้า ให้ Gemini")
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.45))
+            if store.stationOffline {
+                // ค่าบนจอเป็นค่าเก่า — ไม่ให้ส่งไปวิเคราะห์ว่า "พ่นตอนนี้ได้ไหม"
+                Label("DEVICE OFFLINE — สถานีไม่มีข้อมูลบน cloud เกิน 30 นาที — รอสถานีกลับมาก่อนจึงวิเคราะห์ได้",
+                      systemImage: "wifi.slash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.orange)
+            } else {
+                Text("ส่งค่าเหล่านี้ + UV + ความกดอากาศ + พยากรณ์ 6 ชม.ข้างหน้า ให้ Gemini")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
         }
     }
 
@@ -166,7 +174,9 @@ struct AgricultureView: View {
         .keyboardShortcut(.return, modifiers: .command)
     }
 
-    private var canAnalyze: Bool { advisor.hasAPIKey && !advisor.sprayTypes.isEmpty }
+    private var canAnalyze: Bool {
+        advisor.hasAPIKey && !advisor.sprayTypes.isEmpty && !store.stationOffline
+    }
 
     // MARK: - Gemini API key
 
