@@ -22,6 +22,8 @@ final class WeatherStore: ObservableObject {
     @Published var correction: SensorCorrection?
     /// ส่วนต่างเซนเซอร์ − พยากรณ์ ณ ตอนนี้ ที่ใช้ยึดชั่วโมงแรก ๆ (nil = ไม่ได้ใช้)
     @Published var nowcast: Nowcast.Anchor?
+    /// ความกดอากาศ 24 ชม.ล่าสุด (ค่าเฉลี่ยรายชั่วโมงของสถานี + ค่าล่าสุด) สำหรับกราฟเทรนด์
+    @Published var pressureTrend: [PressurePoint] = []
 
     let config: AppConfig
     private let service: WeatherService
@@ -80,8 +82,9 @@ final class WeatherStore: ObservableObject {
             forecastError = "พยากรณ์ดึงไม่สำเร็จ (\(f.error)) — แสดงชุดล่าสุดเมื่อ \(at)"
             logger.log("ใช้พยากรณ์ชุดล่าสุด (\(at, privacy: .public)) แทน: \(f.error, privacy: .public)")
         }
+        await refreshHistoryIfNeeded()
+        pressureTrend = Self.pressureSeries(history: history, obs: stationOffline ? nil : obs)
         if config.sensorCorrection {
-            await refreshHistoryIfNeeded()
             let c = SensorCorrection.compute(past: past, history: history)
             if c != correction {
                 logger.log("ค่าปรับแก้พยากรณ์จากเซนเซอร์: \(c?.summary ?? "ข้อมูลไม่พอ", privacy: .public) (\(c?.pairedHours ?? 0, privacy: .public) ชม.)")
@@ -120,6 +123,18 @@ final class WeatherStore: ObservableObject {
         } else {
             logger.error("refresh มี error: \(self.errorMessage, privacy: .public)")
         }
+    }
+
+    private static func pressureSeries(history: [PWSHourlyObs], obs: PWSObservation?) -> [PressurePoint] {
+        let from = Date().addingTimeInterval(-24 * 3600)
+        var pts = history.compactMap { row -> PressurePoint? in
+            guard let t = row.obsTimeUtc, t >= from, let p = row.pressure else { return nil }
+            return PressurePoint(time: t, hPa: p)
+        }
+        if let obs, let t = obs.obsTimeUtc, let p = obs.metric.pressure, t > (pts.last?.time ?? from) {
+            pts.append(PressurePoint(time: t, hPa: p))
+        }
+        return pts.sorted { $0.time < $1.time }
     }
 
     /// ประวัติรายชั่วโมงของสถานีเปลี่ยนชั่วโมงละครั้ง — ดึงใหม่เมื่อเก่ากว่า 1 ชม.
@@ -203,4 +218,9 @@ final class WeatherStore: ObservableObject {
             }
         }
     }
+}
+
+struct PressurePoint: Equatable {
+    let time: Date
+    let hPa: Double
 }

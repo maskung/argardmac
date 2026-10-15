@@ -919,3 +919,94 @@ final class RainNSView: NSView {
         return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
     }
 }
+
+// MARK: - กราฟเส้นเทรนด์ความกดอากาศ 24 ชม.
+
+struct PressureSparkline: View {
+    let points: [PressurePoint]
+    private static let line = Color(red: 0.35, green: 0.85, blue: 0.70)
+
+    /// เปลี่ยนไปเท่าไรใน 3 ชม.ล่าสุด (เกณฑ์ barometric tendency ของ WMO ใช้ช่วง 3 ชม.)
+    private var change3h: Double? {
+        guard let last = points.last else { return nil }
+        let target = last.time.addingTimeInterval(-3 * 3600)
+        guard let ref = points.min(by: { abs($0.time.timeIntervalSince(target)) < abs($1.time.timeIntervalSince(target)) }),
+              abs(ref.time.timeIntervalSince(target)) < 3600 else { return nil }
+        return last.hPa - ref.hPa
+    }
+
+    private var trendText: (String, Color) {
+        guard let d = change3h else { return ("-", .white.opacity(0.5)) }
+        let v = String(format: "%+.1f hPa/3h", d)
+        if d >= 1.6 { return ("⇈ \(v)", Color(red: 0.95, green: 0.55, blue: 0.35)) }
+        if d >= 0.5 { return ("↗ \(v)", .white) }
+        if d <= -1.6 { return ("⇊ \(v)", Color(red: 0.40, green: 0.70, blue: 1.0)) }
+        if d <= -0.5 { return ("↘ \(v)", .white) }
+        return ("→ \(v)", .white.opacity(0.75))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("PRESSURE 24H")
+                    .font(.system(size: 9, weight: .semibold))
+                    .kerning(1)
+                    .foregroundStyle(.white.opacity(0.45))
+                if let lo = points.map(\.hPa).min(), let hi = points.map(\.hPa).max() {
+                    Text(String(format: "%.0f–%.0f", lo, hi))
+                        .font(.system(size: 9))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                Spacer()
+                let (text, color) = trendText
+                Text(text)
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(color)
+            }
+            chart.frame(height: 30)
+        }
+    }
+
+    private var chart: some View {
+        GeometryReader { geo in
+            if points.count >= 2, let t0 = points.first?.time, let t1 = points.last?.time, t1 > t0 {
+                let vals = points.map(\.hPa)
+                let lo = vals.min()!, hi = vals.max()!
+                let span = max(hi - lo, 1.0)            // อย่างน้อย 1 hPa เต็มความสูง กันเส้นแกว่งเกินจริง
+                let mid = (hi + lo) / 2
+                let w = geo.size.width, h = geo.size.height
+                let pts = points.map { p in
+                    CGPoint(x: w * p.time.timeIntervalSince(t0) / t1.timeIntervalSince(t0),
+                            y: h / 2 - (p.hPa - mid) / span * (h - 6))
+                }
+                let line = Path { path in
+                    path.move(to: pts[0])
+                    pts.dropFirst().forEach { path.addLine(to: $0) }
+                }
+                ZStack(alignment: .topLeading) {
+                    Path { path in
+                        path.addPath(line)
+                        path.addLine(to: CGPoint(x: pts.last!.x, y: h))
+                        path.addLine(to: CGPoint(x: pts[0].x, y: h))
+                        path.closeSubpath()
+                    }
+                    .fill(LinearGradient(colors: [Self.line.opacity(0.30), Self.line.opacity(0)],
+                                         startPoint: .top, endPoint: .bottom))
+                    line.stroke(Self.line, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    Circle()
+                        .fill(Self.line)
+                        .frame(width: 5, height: 5)
+                        .shadow(color: Self.line.opacity(0.8), radius: 3)
+                        .position(pts.last!)
+                }
+            } else {
+                Text("ยังไม่มีข้อมูลย้อนหลัง")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+}

@@ -303,21 +303,25 @@ struct HumidityCard: View {
 struct PressureAQICard: View {
     let obs: PWSObservation
     let air: AQCurrent
+    var pressureTrend: [PressurePoint] = []
 
     var body: some View {
         let aqDesc = WX.aqi(air.usAqi)
         Card(title: "Barometer • Air Quality", systemIcon: "barometer",
              accent: Theme.mintG, badge: "AQI \(WX.fmtInt(air.usAqi))") {
-            HStack(spacing: 16) {
-                BarometerGauge(pressure: obs.metric.pressure)
-                VStack(alignment: .leading, spacing: 6) {
-                    InfoRow("🇺🇸 US AQI",
-                            "\(WX.fmtInt(air.usAqi))  \(aqDesc.emojiText)",
-                            valueColor: aqDesc.severity.color)
-                    AQIBar(aqi: air.usAqi)
-                    InfoRow("💨 PM2.5", WX.fmt(air.pm25, 1, suffix: " µg/m³"))
-                    InfoRow("🌫️ PM10", WX.fmt(air.pm10, 1, suffix: " µg/m³"))
+            VStack(spacing: 10) {
+                HStack(spacing: 16) {
+                    BarometerGauge(pressure: obs.metric.pressure)
+                    VStack(alignment: .leading, spacing: 6) {
+                        InfoRow("🇺🇸 US AQI",
+                                "\(WX.fmtInt(air.usAqi))  \(aqDesc.emojiText)",
+                                valueColor: aqDesc.severity.color)
+                        AQIBar(aqi: air.usAqi)
+                        InfoRow("💨 PM2.5", WX.fmt(air.pm25, 1, suffix: " µg/m³"))
+                        InfoRow("🌫️ PM10", WX.fmt(air.pm10, 1, suffix: " µg/m³"))
+                    }
                 }
+                PressureSparkline(points: pressureTrend)
             }
         }
     }

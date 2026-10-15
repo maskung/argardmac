@@ -109,6 +109,14 @@ struct PWSHourlyObs: Decodable {
     var humidityAvg: Double?
     var tempAvg: Double?
     var windspeedAvg: Double?      // km/h
+    var pressureMax: Double?       // hPa
+    var pressureMin: Double?
+
+    /// ความกดอากาศเฉลี่ยของชั่วโมง (weather.com ให้มาแค่สูงสุด/ต่ำสุด)
+    var pressure: Double? {
+        guard let hi = pressureMax, let lo = pressureMin else { return pressureMax ?? pressureMin }
+        return (hi + lo) / 2
+    }
 
     /// ต้นชั่วโมงของช่วงเฉลี่ย (เทียบกับเวลาพยากรณ์ hh:00)
     var hourStart: Date? {
@@ -116,7 +124,7 @@ struct PWSHourlyObs: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey { case obsTimeUtc, humidityAvg, metric }
-    private enum MetricKeys: String, CodingKey { case tempAvg, windspeedAvg }
+    private enum MetricKeys: String, CodingKey { case tempAvg, windspeedAvg, pressureMax, pressureMin }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -125,6 +133,8 @@ struct PWSHourlyObs: Decodable {
         if let m = try? c.nestedContainer(keyedBy: MetricKeys.self, forKey: .metric) {
             tempAvg = m.flexibleDouble(.tempAvg)
             windspeedAvg = m.flexibleDouble(.windspeedAvg)
+            pressureMax = m.flexibleDouble(.pressureMax)
+            pressureMin = m.flexibleDouble(.pressureMin)
         }
     }
 }
