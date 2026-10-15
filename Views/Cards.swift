@@ -6,6 +6,14 @@ import os
 struct HeroCard: View {
     let store: WeatherStore
 
+    /// "วันพฤหัสบดีที่ 15 ตุลาคม พ.ศ. 2569"
+    private static let thaiDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "th_TH")
+        f.calendar = Calendar(identifier: .buddhist)
+        f.dateFormat = "EEEEที่ d MMMM G yyyy"
+        return f
+    }()
     private static let heroLog = Logger(subsystem: "th.suphanutthanyaboon.argard", category: "hero")
     private static var tickCount = 0
 
@@ -107,7 +115,7 @@ struct HeroCard: View {
                     .font(.system(size: 38, weight: .thin, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.92))
-                Text(now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                Text(Self.thaiDate.string(from: now))
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.5))
                 if let updated = store.lastUpdated {
