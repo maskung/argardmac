@@ -96,6 +96,10 @@ final class WeatherStore: ObservableObject {
         } else {
             (forecast, nowcast) = (corrected, nil)
         }
+        // ข้อมูลเก็บย้อนไว้ 90 นาทีเพื่อให้ nowcast เทียบค่าเซนเซอร์ได้ แต่บนจอเริ่มที่ชั่วโมงปัจจุบัน
+        if let hourStart = Calendar.current.dateInterval(of: .hour, for: Date())?.start {
+            forecast = forecast.filter { $0.dt >= hourStart.timeIntervalSince1970 }
+        }
         // คุณภาพอากาศก็เช่นกัน — ดึงไม่สำเร็จคงค่าเดิมไว้
         if a.1.isEmpty { air = a.0 }
 
