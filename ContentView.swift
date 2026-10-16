@@ -33,6 +33,7 @@ struct ContentView: View {
                             switch store.tab {
                             case .dashboard: DashboardView(store: store)
                             case .forecast: ForecastView(store: store)
+                            case .radar: RainRadarView(store: store)
                             case .agriculture: AgricultureView(store: store, advisor: sprayAdvisor)
                             }
                         }

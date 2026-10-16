@@ -22,7 +22,7 @@ struct DashboardView: View {
                 LazyVGrid(columns: columns, spacing: 10) {
                     ThermalCard(obs: store.obs)
                     WindCard(obs: store.obs)
-                    RainCard(obs: store.obs)
+                    RainCard(obs: store.obs, radar: store.radar, radarError: store.radarError)
                     SolarUVCard(obs: store.obs)
                     HumidityCard(obs: store.obs)
                     PressureAQICard(obs: store.obs, air: store.air, pressureTrend: store.pressureTrend)

@@ -49,10 +49,11 @@ struct HeaderBar: View {
             Picker("", selection: $store.tab) {
                 Text("Dashboard").tag(WeatherStore.Tab.dashboard)
                 Text("10h Forecast").tag(WeatherStore.Tab.forecast)
+                Text("Rain Radar").tag(WeatherStore.Tab.radar)
                 Text("Agriculture AI").tag(WeatherStore.Tab.agriculture)
             }
             .pickerStyle(.segmented)
-            .frame(width: 370)
+            .fixedSize()
 
             Button {
                 Task { await store.refresh() }

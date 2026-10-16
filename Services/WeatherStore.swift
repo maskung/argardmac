@@ -7,7 +7,7 @@ import os
 /// และคุม auto-refresh ตาม REFRESH_SECONDS
 @MainActor
 final class WeatherStore: ObservableObject {
-    enum Tab: Hashable { case dashboard, forecast, agriculture }
+    enum Tab: Hashable { case dashboard, forecast, radar, agriculture }
 
     @Published var obs = PWSObservation()
     @Published var forecast: [OWForecastItem] = []
@@ -24,6 +24,9 @@ final class WeatherStore: ObservableObject {
     @Published var nowcast: Nowcast.Anchor?
     /// ความกดอากาศ 24 ชม.ล่าสุด (ค่าเฉลี่ยรายชั่วโมงของสถานี + ค่าล่าสุด) สำหรับกราฟเทรนด์
     @Published var pressureTrend: [PressurePoint] = []
+    /// ภาพเรดาร์ฝนรอบสวน + ทำนายว่าฝนจะถึงเมื่อไร (nil = ยังไม่เคยดึงสำเร็จ)
+    @Published var radar: RadarSnapshot?
+    @Published var radarError = ""
 
     let config: AppConfig
     private let service: WeatherService
@@ -34,10 +37,20 @@ final class WeatherStore: ObservableObject {
     /// พยากรณ์ดิบชุดล่าสุดที่ดึงสำเร็จ — ใช้ต่อเมื่อ Open-Meteo ล่มชั่วคราว (เช่น HTTP 503)
     private var lastForecast: (upcoming: [OWForecastItem], past: [OWForecastItem], at: Date)?
     private var historyFetchedAt: Date?
+    private lazy var radarService = RainRadarService(latitude: config.latitude, longitude: config.longitude)
+    private var radarFetchedAt: Date?
+    private var radarBusy = false
 
     init(config: AppConfig = AppConfig.load()) {
         self.config = config
         self.service = WeatherService(config: config)
+        // ใช้ตอนพัฒนา: defaults write th.suphanutthanyaboon.argard debug.tab radar (ลบด้วย defaults delete)
+        switch UserDefaults.standard.string(forKey: "debug.tab") {
+        case "forecast": tab = .forecast
+        case "radar": tab = .radar
+        case "agriculture": tab = .agriculture
+        default: break
+        }
     }
 
     var refreshSeconds: Int { max(10, config.refreshSeconds) }
@@ -103,6 +116,7 @@ final class WeatherStore: ObservableObject {
         if let hourStart = Calendar.current.dateInterval(of: .hour, for: Date())?.start {
             forecast = forecast.filter { $0.dt >= hourStart.timeIntervalSince1970 }
         }
+        Task { await refreshRadarIfNeeded() }
         // คุณภาพอากาศก็เช่นกัน — ดึงไม่สำเร็จคงค่าเดิมไว้
         if a.1.isEmpty { air = a.0 }
 
@@ -135,6 +149,27 @@ final class WeatherStore: ObservableObject {
             pts.append(PressurePoint(time: t, hPa: p))
         }
         return pts.sorted { $0.time < $1.time }
+    }
+
+    /// RainViewer ออกภาพใหม่ทุก 10 นาที — เช็คทุก 5 นาทีก็พอ (เขาขอให้ไม่ดึงถี่)
+    private func refreshRadarIfNeeded() async {
+        if radarBusy { return }
+        if let t = radarFetchedAt, Date().timeIntervalSince(t) < 300 { return }
+        radarBusy = true
+        defer { radarBusy = false }
+        do {
+            let snap = try await radarService.fetch()
+            radar = snap
+            radarError = ""
+            radarFetchedAt = Date()
+            if let c = snap.nowcast {
+                logger.log("เรดาร์ \(c.frameTime.formatted(.dateTime.hour().minute()), privacy: .public): \(c.headline(), privacy: .public) \(c.detail ?? "", privacy: .public)")
+            }
+        } catch {
+            radarError = error.localizedDescription
+            radarFetchedAt = Date().addingTimeInterval(-240)     // ลองใหม่ในอีก ~1 นาที
+            logger.error("ดึงเรดาร์ไม่ได้: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// ประวัติรายชั่วโมงของสถานีเปลี่ยนชั่วโมงละครั้ง — ดึงใหม่เมื่อเก่ากว่า 1 ชม.

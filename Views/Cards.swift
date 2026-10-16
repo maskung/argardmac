@@ -216,16 +216,56 @@ struct WindCard: View {
 
 struct RainCard: View {
     let obs: PWSObservation
+    var radar: RadarSnapshot? = nil
+    var radarError = ""
 
     var body: some View {
         let m = obs.metric
         let desc = WX.rain(m.precipRate)
-        Card(title: "Rainfall", systemIcon: "cloud.rain",
+        Card(title: "Rainfall • Radar", systemIcon: "cloud.rain",
              accent: Theme.rain, badge: WX.fmt(m.precipTotal, 0, suffix: " mm"),
              minHeight: firstRowCardHeight) {
-            InfoRow("📈 Rate", WX.fmt(m.precipRate, 2, suffix: " mm/h"))
-            InfoRow("💧 Intensity", desc.emojiText, valueColor: desc.severity.color)
-            InfoRow("📅 Today", WX.fmt(m.precipTotal, 1, suffix: " mm"))
+            HStack(alignment: .top, spacing: 12) {
+                RadarMiniMap(snapshot: radar)
+                    .frame(width: 112, height: 112)
+                VStack(alignment: .leading, spacing: 6) {
+                    InfoRow("📈 Rate", WX.fmt(m.precipRate, 2, suffix: " mm/h"))
+                    InfoRow("💧 Intensity", desc.emojiText, valueColor: desc.severity.color)
+                    InfoRow("📅 Today", WX.fmt(m.precipTotal, 1, suffix: " mm"))
+                    nowcastText
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var nowcastText: some View {
+        if let c = radar?.nowcast {
+            let color: Color = switch c.status {
+            case .raining: Color(red: 0.40, green: 0.75, blue: 1.0)
+            case .approaching: .orange
+            case .nearby: .white.opacity(0.75)
+            case .clear: Color(red: 0.45, green: 0.85, blue: 0.55)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c.headline(sensorRate: obs.metric.precipRate))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(color)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let d = c.detail {
+                    Text(d)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .padding(.top, 2)
+        } else if !radarError.isEmpty {
+            Text("เรดาร์: \(radarError)")
+                .font(.system(size: 10))
+                .foregroundStyle(.orange.opacity(0.8))
+                .lineLimit(2)
         }
     }
 }
