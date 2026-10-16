@@ -12,6 +12,8 @@ struct RadarFrame {
     let image: CGImage          // ภาพสีของเรดาร์ (โปร่งใสตรงไม่มีฝน) ขนาด size × size
     let dbz: [UInt8]            // ค่า dBZ ต่อพิกเซล (0 = ไม่มีฝน/ต่ำกว่า 15) — ว่างในเฟรมคาดการณ์
     var isForecast = false
+    /// ภาพละเอียดของกลางภาพ ±detailHalf (ขยาย ×detailScale แบบเกลี่ยขอบ) — ใช้ตอนซูมใกล้
+    var detail: CGImage? = nil
 }
 
 /// ความแรงฝนที่คาดว่าจะผ่านสวน ณ เวลาหนึ่ง (จากการเลื่อนภาพล่าสุด)
@@ -101,6 +103,8 @@ struct RadarSnapshot {
     let frames: [RadarFrame]    // เก่า → ใหม่
     let forecast: [RadarFrame]  // ภาพคาดการณ์ +10…+60 นาที (ภาพล่าสุดเลื่อนตามทิศที่ฝนเคลื่อน)
     let basemap: CGImage?
+    let detailBasemap: CGImage? // แผนที่ฐานละเอียด (ซูม 9) ของกลางภาพ ±detailHalf
+    let detailLabels: CGImage?  // ชื่อสถานที่ (โปร่งใส) วางทับเรดาร์ตอนซูมใกล้
     let nowcast: RadarNowcast?
     let size: Int
     let kmPerPixel: Double
@@ -112,6 +116,8 @@ final class RainRadarService {
     static let zoom = 7                 // ระดับซูมสูงสุดที่ RainViewer ให้ (~1.2 กม./พิกเซลแถวจันทบุรี)
     static let radius = 200             // พิกเซลรอบสวน → ภาพ 400×400 (±240 กม.)
     static let analysisRadius = 120     // วิเคราะห์ทิศ/ETA เฉพาะ ±140 กม. (ไกลกว่านั้นไม่ทันใน 2 ชม. และช้า)
+    static let detailHalf = 90          // ภาพละเอียดครอบคลุม ±107 กม. (พอสำหรับซูม 50/100 กม.)
+    static let detailScale = 4
     static let rainDBZ = 20             // เกณฑ์ "ฝนถึงพื้น" (~0.5–1 มม./ชม.)
 
     private let lat: Double
@@ -119,6 +125,8 @@ final class RainRadarService {
     private let session: URLSession
     private var cache: [String: RadarFrame] = [:]   // path → เฟรม (ภาพย้อนหลังไม่เปลี่ยน)
     private var basemap: CGImage?
+    private var detailBasemap: CGImage?
+    private var detailLabels: CGImage?
 
     init(latitude: Double, longitude: Double) {
         lat = latitude
@@ -159,8 +167,11 @@ final class RainRadarService {
                     let img = try await self.stitch { tx, ty in
                         URL(string: "\(maps.host)\(f.path)/256/\(Self.zoom)/\(tx)/\(ty)/2/0_0.png")!
                     }
-                    return (f.path, RadarFrame(time: Date(timeIntervalSince1970: f.time), image: img,
-                                               dbz: Self.decode(img)))
+                    let dbz = Self.decode(img)
+                    let n = Self.radius * 2
+                    return (f.path, RadarFrame(time: Date(timeIntervalSince1970: f.time), image: img, dbz: dbz,
+                                               detail: Self.smooth(dbz, size: n, from: Self.radius - Self.detailHalf,
+                                                                   count: Self.detailHalf * 2, scale: Self.detailScale)))
                 }
             }
             return try await group.reduce(into: [String: RadarFrame]()) { $0[$1.0] = $1.1 }
@@ -170,7 +181,9 @@ final class RainRadarService {
         let keep = Set(past.map(\.path))
         cache = cache.filter { keep.contains($0.key) }
 
-        if basemap == nil { basemap = try? await loadBasemap() }
+        if basemap == nil { basemap = try? await loadBasemap(detail: false) }
+        if detailBasemap == nil { detailBasemap = try? await loadBasemap(detail: true) }
+        if detailLabels == nil { detailLabels = try? await loadBasemap(detail: true, layer: "World_Dark_Gray_Reference") }
 
         let p = worldPixel, o = origin
         let garden = CGPoint(x: p.x - Double(o.x), y: p.y - Double(o.y))
@@ -183,7 +196,8 @@ final class RainRadarService {
                                 kmPerPixel: kmPerPixel)
         cast?.rangeKm = Double(a) * kmPerPixel
         let forecast = frames.last.map { Self.extrapolate($0, motion: cast?.motionVector) } ?? []
-        return RadarSnapshot(frames: frames, forecast: forecast, basemap: basemap, nowcast: cast,
+        return RadarSnapshot(frames: frames, forecast: forecast, basemap: basemap,
+                             detailBasemap: detailBasemap, detailLabels: detailLabels, nowcast: cast,
                              size: size, kmPerPixel: kmPerPixel, garden: garden)
     }
 
@@ -199,15 +213,80 @@ final class RainRadarService {
     /// ภาพคาดการณ์ +10…+60 นาที: เลื่อนภาพล่าสุดไปตามทิศที่ฝนเคลื่อน (ฝนแรงเท่าเดิม ไม่เกิด/ไม่สลาย)
     private static func extrapolate(_ last: RadarFrame, motion v: CGVector?) -> [RadarFrame] {
         guard let v, (v.dx * v.dx + v.dy * v.dy).squareRoot() * 60 >= 2 else { return [] }   // < ~2.4 กม./ชม. = อยู่กับที่
-        let w = last.image.width, h = last.image.height
-        return stride(from: 10, through: 60, by: 10).compactMap { t -> RadarFrame? in
+        /// เลื่อนภาพ (dx, dy) พิกเซล — y ของภาพชี้ลง แต่ CGContext นับขึ้น
+        func shift(_ img: CGImage, _ dx: Double, _ dy: Double) -> CGImage? {
+            let w = img.width, h = img.height
             guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-            // y ของภาพชี้ลง แต่ CGContext นับขึ้น
-            ctx.draw(last.image, in: CGRect(x: v.dx * Double(t), y: -v.dy * Double(t), width: Double(w), height: Double(h)))
-            guard let img = ctx.makeImage() else { return nil }
-            return RadarFrame(time: last.time.addingTimeInterval(Double(t) * 60), image: img, dbz: [], isForecast: true)
+            ctx.draw(img, in: CGRect(x: dx, y: -dy, width: Double(w), height: Double(h)))
+            return ctx.makeImage()
+        }
+        let k = Double(detailScale)
+        return stride(from: 10, through: 60, by: 10).compactMap { t -> RadarFrame? in
+            let dx = v.dx * Double(t), dy = v.dy * Double(t)
+            guard let img = shift(last.image, dx, dy) else { return nil }
+            return RadarFrame(time: last.time.addingTimeInterval(Double(t) * 60), image: img, dbz: [],
+                              isForecast: true, detail: last.detail.flatMap { shift($0, dx * k, dy * k) })
+        }
+    }
+
+    /// ขยายค่า dBZ ส่วนกลางภาพ ×scale แบบ bilinear + เบลอเบา ๆ แล้วลงสีใหม่ — ขอบกลุ่มฝนโค้งมนแทนเป็นเหลี่ยม
+    /// (ข้อมูลจริงยังละเอียด ~1.2 กม. เท่าเดิม แค่วาดให้ดูเป็นธรรมชาติ)
+    static func smooth(_ dbz: [UInt8], size: Int, from: Int, count n: Int, scale: Int) -> CGImage? {
+        let m = n * scale
+        var up = [Float](repeating: 0, count: m * m)
+        func src(_ x: Int, _ y: Int) -> Float {
+            Float(dbz[(from + min(max(y, 0), n - 1)) * size + from + min(max(x, 0), n - 1)])
+        }
+        let inv = 1 / Float(scale)
+        for Y in 0..<m {
+            let v = (Float(Y) + 0.5) * inv - 0.5
+            let y0 = Int(v.rounded(.down)), fy = v - Float(y0)
+            for X in 0..<m {
+                let u = (Float(X) + 0.5) * inv - 0.5
+                let x0 = Int(u.rounded(.down)), fx = u - Float(x0)
+                let top = src(x0, y0) * (1 - fx) + src(x0 + 1, y0) * fx
+                let bot = src(x0, y0 + 1) * (1 - fx) + src(x0 + 1, y0 + 1) * fx
+                up[Y * m + X] = top * (1 - fy) + bot * fy
+            }
+        }
+        // เบลอแบบกล่อง 5×5 (แยกแนวนอน/ตั้ง) ลบรอยหยักที่ bilinear ทิ้งไว้
+        var tmp = up
+        let rad = 2, w = Float(2 * rad + 1)
+        for y in 0..<m {
+            for x in 0..<m {
+                var s: Float = 0
+                for d in -rad...rad { s += up[y * m + min(max(x + d, 0), m - 1)] }
+                tmp[y * m + x] = s / w
+            }
+        }
+        for y in 0..<m {
+            for x in 0..<m {
+                var s: Float = 0
+                for d in -rad...rad { s += tmp[min(max(y + d, 0), m - 1) * m + x] }
+                up[y * m + x] = s / w
+            }
+        }
+        // ลงสีตามตารางเดิม ผสมสีระหว่างขั้น + ขอบค่อย ๆ จาง (12→16 dBZ)
+        var px = [UInt8](repeating: 0, count: m * m * 4)
+        for i in 0..<(m * m) {
+            let v = up[i]
+            guard v > 12 else { continue }
+            let a = min(1, (v - 12) / 4)
+            let f = min(max(v - Float(paletteMinDBZ), 0), Float(palette.count - 1))
+            let i0 = Int(f), i1 = min(i0 + 1, palette.count - 1), t = f - Float(i0)
+            let c0 = palette[i0], c1 = palette[i1]
+            for (k, sh) in [16, 8, 0].enumerated() {
+                let a0 = Float(c0 >> UInt32(sh) & 255), a1 = Float(c1 >> UInt32(sh) & 255)
+                px[i * 4 + k] = UInt8((a0 + (a1 - a0) * t) * a)       // premultiplied
+            }
+            px[i * 4 + 3] = UInt8(a * 255)
+        }
+        return px.withUnsafeMutableBytes { buf -> CGImage? in
+            CGContext(data: buf.baseAddress, width: m, height: m, bitsPerComponent: 8, bytesPerRow: m * 4,
+                      space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
         }
     }
 
@@ -225,8 +304,10 @@ final class RainRadarService {
 
     /// ดึงไทล์ที่คร่อมกรอบภาพรอบสวน แล้วตัดมาเป็นภาพ size × size
     /// scale = ความละเอียดของไทล์เทียบกับซูมเรดาร์ (แผนที่ฐานใช้ 2 เพื่อให้คมบนจอ retina)
-    private func stitch(scale: Int = 1, url: (Int, Int) -> URL) async throws -> CGImage {
-        let o = origin, s = size
+    /// from/count: ส่วนของกรอบ (พิกเซลเรดาร์นับจากมุมซ้ายบน) — ค่าเริ่มต้น = ทั้งภาพ
+    private func stitch(scale: Int = 1, from: Int = 0, count: Int? = nil,
+                        url: (Int, Int) -> URL) async throws -> CGImage {
+        let o = (x: origin.x + from, y: origin.y + from), s = count ?? size
         let px = s * scale, tilePx = 256
         guard let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),
@@ -256,19 +337,26 @@ final class RainRadarService {
     }
 
     /// แผนที่ฐานโทนมืด (Esri World Dark Gray) — ดึงครั้งเดียวแล้วเก็บไว้ในเครื่อง
-    private func loadBasemap() async throws -> CGImage {
+    /// detail = แผนที่ซูม 9 เฉพาะกลางภาพ ±detailHalf สำหรับตอนซูมใกล้ (ชื่ออำเภอ/ถนนชัดขึ้น)
+    private func loadBasemap(detail: Bool, layer: String = "World_Dark_Gray_Base") async throws -> CGImage {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Argard", isDirectory: true)
-        let file = dir.appendingPathComponent(String(format: "basemap-%.4f-%.4f-z%d-r%d.png", lat, lon, Self.zoom, Self.radius))
+        let file = dir.appendingPathComponent(String(format: "%@-%.4f-%.4f-z%d-r%d%@.png", layer == "World_Dark_Gray_Base" ? "basemap" : "labels",
+                                                          lat, lon, Self.zoom, Self.radius,
+                                                          detail ? "-detail\(Self.detailHalf)" : ""))
         if let src = CGImageSourceCreateWithURL(file as CFURL, nil),
            let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
             return img
         }
-        let z = Self.zoom + 1
+        let scale = detail ? Self.detailScale : 2
+        let z = Self.zoom + (scale == 4 ? 2 : 1)
         let base = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas"
-        let img = try await stitch(scale: 2) { tx, ty in
-            URL(string: "\(base)/World_Dark_Gray_Base/MapServer/tile/\(z)/\(ty)/\(tx)")!
+        let tiles = { (tx: Int, ty: Int) in
+            URL(string: "\(base)/\(layer)/MapServer/tile/\(z)/\(ty)/\(tx)")!
         }
+        let img = detail
+            ? try await stitch(scale: scale, from: Self.radius - Self.detailHalf, count: Self.detailHalf * 2, url: tiles)
+            : try await stitch(scale: scale, url: tiles)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         if let dest = CGImageDestinationCreateWithURL(file as CFURL, "public.png" as CFString, 1, nil) {
             CGImageDestinationAddImage(dest, img, nil)

@@ -5,7 +5,7 @@ struct RainRadarView: View {
     @ObservedObject var store: WeatherStore
     @State private var playing = true
     @State private var manualIndex = 0
-    @State private var zoomKm = 100.0
+    @AppStorage("radar.zoomKm") private var zoomKm = 100.0     // จำระยะซูมที่เลือกไว้
 
     private static let tick = 0.45          // วินาทีต่อเฟรม
     private static let holdTicks = 4        // ค้างเฟรมสุดท้ายก่อนวนใหม่
@@ -233,19 +233,27 @@ private struct RadarBigMap: View {
 
             ZStack(alignment: .topLeading) {
                 Color(red: 0.13, green: 0.14, blue: 0.16)
-                if let base = s.basemap {
-                    Image(decorative: base, scale: 1)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: full, height: full)
-                        .offset(x: ox, y: oy)
+                // ซูมใกล้ (อยู่ในกรอบภาพละเอียด) ใช้ภาพที่เกลี่ยขอบแล้ว + แผนที่ซูม 9 / ไกลใช้ภาพเต็มเดิม
+                let dh = CGFloat(RainRadarService.detailHalf)
+                let useDetail = half <= dh && frame.detail != nil
+                let d0 = CGFloat(s.size) / 2 - dh                  // มุมซ้ายบนของภาพละเอียด (พิกเซลเรดาร์)
+                let dx = (d0 - (s.garden.x - half)) * k, dy = (d0 - (s.garden.y - half)) * k
+                if useDetail, let base = s.detailBasemap {
+                    layer(base, x: dx, y: dy, side: dh * 2 * k, interpolation: .high)
+                } else if let base = s.basemap {
+                    layer(base, x: ox, y: oy, side: full, interpolation: .high)
                 }
-                Image(decorative: frame.image, scale: 1)
-                    .resizable()
-                    .interpolation(zoomKm <= 50 ? .none : .medium)
-                    .frame(width: full, height: full)
-                    .offset(x: ox, y: oy)
-                    .opacity(frame.isForecast ? 0.7 : 0.85)
+                Group {
+                    if useDetail, let img = frame.detail {
+                        layer(img, x: dx, y: dy, side: dh * 2 * k, interpolation: .medium)
+                    } else {
+                        layer(frame.image, x: ox, y: oy, side: full, interpolation: .medium)
+                    }
+                }
+                .opacity(frame.isForecast ? 0.7 : 0.85)
+                if useDetail, let labels = s.detailLabels {
+                    layer(labels, x: dx, y: dy, side: dh * 2 * k, interpolation: .high)
+                }
 
                 rings(center: center, pxPerKm: k / CGFloat(s.kmPerPixel), side: side)
                 if let v = s.nowcast?.motionVector {
@@ -261,6 +269,15 @@ private struct RadarBigMap: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(frame.isForecast ? Color.orange.opacity(0.7) : .white.opacity(0.12),
                           style: StrokeStyle(lineWidth: frame.isForecast ? 2 : 1, dash: frame.isForecast ? [6, 4] : [])))
+    }
+
+    private func layer(_ img: CGImage, x: CGFloat, y: CGFloat, side: CGFloat,
+                       interpolation: Image.Interpolation) -> some View {
+        Image(decorative: img, scale: 1)
+            .resizable()
+            .interpolation(interpolation)
+            .frame(width: side, height: side)
+            .offset(x: x, y: y)
     }
 
     private func rings(center: CGPoint, pxPerKm: CGFloat, side: CGFloat) -> some View {

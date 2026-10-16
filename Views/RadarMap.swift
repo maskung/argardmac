@@ -1,11 +1,11 @@
 import SwiftUI
 import AppKit
 
-/// แผนที่เรดาร์ขนาดเล็ก: แผนที่ฐาน + ภาพฝนย้อนหลัง ~2 ชม. เล่นวน + จุดสวนและวงรัศมี 25/50 กม.
+/// แผนที่เรดาร์ขนาดเล็ก: แผนที่ฐาน + ภาพฝนย้อนหลัง ~2 ชม. เล่นวน + จุดสวนและวงรัศมี 10/25 กม.
 struct RadarMiniMap: View {
     let snapshot: RadarSnapshot?
-    /// แสดงเฉพาะกลางภาพ ±viewRadius พิกเซล (~±95 กม.) — ภาพเต็มกว้างเกินสำหรับการ์ดเล็ก
-    var viewRadius = 80
+    /// แสดงรอบสวน ±viewKm — การ์ดเล็ก ดูแค่ใกล้ ๆ สวนก็พอ (ใช้ภาพเกลี่ยขอบแบบหน้า Rain Radar)
+    var viewKm = 50.0
 
     var body: some View {
         GeometryReader { geo in
@@ -13,13 +13,15 @@ struct RadarMiniMap: View {
             ZStack(alignment: .topLeading) {
                 Color(red: 0.13, green: 0.14, blue: 0.16)
                 if let snap = snapshot {
-                    let cut = CGFloat(snap.size / 2 - viewRadius)
-                    RadarLoopView(snapshot: snap, visible: CGRect(x: cut / CGFloat(snap.size), y: cut / CGFloat(snap.size),
-                                                                  width: CGFloat(2 * viewRadius) / CGFloat(snap.size),
-                                                                  height: CGFloat(2 * viewRadius) / CGFloat(snap.size)))
-                    let k = side / CGFloat(2 * viewRadius)
+                    // ภาพละเอียดครอบคลุมพิกเซลเรดาร์ [size/2 − dh, size/2 + dh] — ตัดกลางออกมา ±half
+                    let dh = CGFloat(RainRadarService.detailHalf)
+                    let half = min(CGFloat(viewKm / snap.kmPerPixel), dh)
+                    let f = (dh - half) / (2 * dh)
+                    RadarLoopView(snapshot: snap, visible: CGRect(x: f, y: f, width: 1 - 2 * f, height: 1 - 2 * f))
+                    let cut = CGFloat(snap.size) / 2 - half
+                    let k = side / (2 * half)
                     let g = CGPoint(x: (snap.garden.x - cut) * k, y: (snap.garden.y - cut) * k)
-                    ForEach([25.0, 50.0], id: \.self) { km in
+                    ForEach([10.0, 25.0], id: \.self) { km in
                         let r = km / snap.kmPerPixel * k
                         Circle()
                             .strokeBorder(.white.opacity(0.22), style: StrokeStyle(lineWidth: 0.6, dash: [2, 2]))
@@ -63,6 +65,7 @@ private struct RadarLoopView: NSViewRepresentable {
         // ตัดกลางภาพแบบสมมาตร — ไม่ต้องสนว่า contentsRect นับ y จากบนหรือล่าง
         v.base.contentsRect = visible
         v.radar.contentsRect = visible
+        v.labels.contentsRect = visible
         v.show(snapshot)
     }
 }
@@ -70,6 +73,7 @@ private struct RadarLoopView: NSViewRepresentable {
 private final class RadarLayerView: NSView {
     let base = CALayer()
     let radar = CALayer()
+    let labels = CALayer()
     private var key = ""
 
     override init(frame: NSRect) {
@@ -77,12 +81,11 @@ private final class RadarLayerView: NSView {
         // layer-hosting view (ตั้ง layer เองก่อน wantsLayer) — AppKit จะไม่ไปยุ่งกับ sublayer ของเรา
         layer = CALayer()
         wantsLayer = true
-        for l in [base, radar] {
+        for l in [base, radar, labels] {
             l.contentsGravity = .resize
+            l.magnificationFilter = .linear
             layer?.addSublayer(l)
         }
-        base.magnificationFilter = .linear
-        radar.magnificationFilter = .nearest       // ให้เห็นเป็นช่องพิกเซลเรดาร์ชัด ๆ
         radar.opacity = 0.85
     }
 
@@ -94,17 +97,20 @@ private final class RadarLayerView: NSView {
         CATransaction.setDisableActions(true)
         base.frame = bounds
         radar.frame = bounds
+        labels.frame = bounds
         CATransaction.commit()
     }
 
     /// SwiftUI เรียก update ทุกวินาที (heartbeat ของ Dashboard) — ตั้งแอนิเมชันใหม่เฉพาะตอนได้ภาพชุดใหม่
     func show(_ snapshot: RadarSnapshot) {
         let newKey = snapshot.frames.map { "\($0.time.timeIntervalSince1970)" }.joined(separator: ",")
-            + (snapshot.basemap == nil ? "" : "+map")
+            + (snapshot.detailBasemap == nil ? "" : "+map") + (snapshot.detailLabels == nil ? "" : "+labels")
         guard newKey != key else { return }
         key = newKey
-        base.contents = snapshot.basemap
-        let images = snapshot.frames.map(\.image)
+        // ใช้ชุดละเอียด (กลางภาพ ±detailHalf) ทั้งแผนที่ เรดาร์ และชื่อสถานที่ ให้ตำแหน่งตรงกัน
+        base.contents = snapshot.detailBasemap
+        labels.contents = snapshot.detailLabels
+        let images = snapshot.frames.compactMap(\.detail)
         radar.removeAllAnimations()
         radar.contents = images.last
         guard images.count > 1 else { return }
