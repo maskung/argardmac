@@ -196,7 +196,7 @@ struct WindCard: View {
         let bft = WX.beaufort(speed)
         Card(title: "Wind • Gust", systemIcon: "wind",
              accent: Theme.breeze, badge: WX.fmt(speed, 0, suffix: " km/h"),
-             minHeight: firstRowCardHeight) {
+             minHeight: firstRowCardHeight, accessory: AnyView(Windsock(speed: speed))) {
             HStack(spacing: 16) {
                 WindGauge(speed: speed, gust: gust, degrees: obs.winddir)
                 VStack(alignment: .leading, spacing: 6) {

@@ -88,6 +88,8 @@ struct Card<Content: View>: View {
     /// ความสูงขั้นต่ำ — การ์ดแถวแรกของ Dashboard ใช้ค่าที่ต่ำกว่าเพื่อให้เห็น
     /// Hourly Forecast ครบโดยไม่ต้อง scroll
     var minHeight: CGFloat = 245
+    /// ไอคอนเสริมกลางแถวหัวการ์ด ระหว่างชื่อกับป้ายค่า (เช่น ถุงลมของการ์ดลม)
+    var accessory: AnyView? = nil
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -104,6 +106,10 @@ struct Card<Content: View>: View {
                     .kerning(1.2)
                     .foregroundStyle(.white.opacity(0.6))
                 Spacer()
+                if let accessory {
+                    accessory
+                    Spacer()
+                }
                 if let badge {
                     Text(badge)
                         .font(.system(size: 10, weight: .bold))
@@ -1008,5 +1014,95 @@ struct PressureSparkline: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+}
+
+
+// MARK: - ถุงลม (windsock) 5 ระดับ
+
+/// ถุงลมลายแดง-ขาวแบบสนามบิน ยิ่งลมแรงยิ่งกางตรง
+/// ระดับตามความเร็วลม (กม./ชม.): <5.5 (ห้อยดิ่ง) • 5.5–11 • 11–16 • 16–22 • ≥22 (กางเต็มที่ 28 ขึ้นไป)
+struct Windsock: View {
+    let speed: Double?
+
+    static func level(_ kmh: Double?) -> Int {
+        guard let v = kmh else { return 1 }
+        switch v {
+        case ..<5.5: return 1
+        case ..<11:  return 2
+        case ..<16:  return 3
+        case ..<22:  return 4
+        default:     return 5
+        }
+    }
+
+    private static let red = Color(red: 0.93, green: 0.27, blue: 0.10)
+    private static let redDark = Color(red: 0.70, green: 0.17, blue: 0.06)
+    private static let white = Color(red: 0.96, green: 0.96, blue: 0.97)
+
+    var body: some View {
+        Canvas { ctx, size in
+            let lv = Self.level(speed)
+            // มุมก้มของปล้องแรก และที่ก้มเพิ่มทีละปล้อง (องศา, ลงล่างเป็นบวก)
+            // ระดับ 1 (ลมแทบไม่มี) ห้อยดิ่งขนานเสา
+            let (a0, bend): (Double, Double) = [(90, 0), (9, 11), (5, 7), (2, 3.5), (1, 0.5)][lv - 1]
+            let s = size.height / 30
+            let poleX = 2.5 * s
+            // ห้อยดิ่ง: ขยับปากถุงออกจากเสาไม่ให้ทับกัน และย่อปล้องให้พอดีความสูงหัวการ์ด
+            let mouth = CGPoint(x: poleX + (lv == 1 ? 7 : 4.5) * s, y: 6.5 * s)
+            let segLen = (lv == 1 ? 4.4 : 6.8) * s
+            let widths: [Double] = [4.6, 4.0, 3.4, 2.8, 2.3, 1.9].map { $0 * s }    // ครึ่งความกว้างที่รอยต่อ
+
+            // จุดกึ่งกลางรอยต่อ + ทิศของแต่ละปล้อง
+            var pts = [mouth]
+            var angles: [Double] = []
+            for i in 0..<5 {
+                let a = (a0 + bend * Double(i)) * .pi / 180
+                angles.append(a)
+                pts.append(CGPoint(x: pts[i].x + cos(a) * segLen, y: pts[i].y + sin(a) * segLen))
+            }
+            // แนวตั้งฉากที่รอยต่อใช้มุมเฉลี่ยของสองปล้อง — ไม่ให้มีร่องระหว่างปล้อง
+            func normal(_ j: Int) -> CGVector {
+                let a = j == 0 ? angles[0] : j == 5 ? angles[4] : (angles[j - 1] + angles[j]) / 2
+                return CGVector(dx: -sin(a), dy: cos(a))
+            }
+
+            // เสา
+            var pole = Path()
+            pole.move(to: CGPoint(x: poleX, y: 3 * s))
+            pole.addLine(to: CGPoint(x: poleX, y: size.height))
+            ctx.stroke(pole, with: .color(.white.opacity(0.75)), style: StrokeStyle(lineWidth: 1.6 * s, lineCap: .round))
+            ctx.fill(Path(ellipseIn: CGRect(x: poleX - 1.4 * s, y: 2 * s, width: 2.8 * s, height: 2.8 * s)),
+                     with: .color(.white.opacity(0.9)))
+            // ลวดยึดจากหัวเสาไปขอบปากถุง
+            let n0 = normal(0)
+            var wire = Path()
+            for side in [1.0, -1.0] {
+                wire.move(to: CGPoint(x: poleX, y: 3.4 * s))
+                wire.addLine(to: CGPoint(x: mouth.x + n0.dx * widths[0] * side, y: mouth.y + n0.dy * widths[0] * side))
+            }
+            ctx.stroke(wire, with: .color(Self.red.opacity(0.9)), lineWidth: 0.7 * s)
+
+            // ปล้องสลับแดง/ขาว
+            for i in 0..<5 {
+                let na = normal(i), nb = normal(i + 1)
+                var seg = Path()
+                seg.move(to: CGPoint(x: pts[i].x + na.dx * widths[i], y: pts[i].y + na.dy * widths[i]))
+                seg.addLine(to: CGPoint(x: pts[i + 1].x + nb.dx * widths[i + 1], y: pts[i + 1].y + nb.dy * widths[i + 1]))
+                seg.addLine(to: CGPoint(x: pts[i + 1].x - nb.dx * widths[i + 1], y: pts[i + 1].y - nb.dy * widths[i + 1]))
+                seg.addLine(to: CGPoint(x: pts[i].x - na.dx * widths[i], y: pts[i].y - na.dy * widths[i]))
+                seg.closeSubpath()
+                ctx.fill(seg, with: .color(i % 2 == 0 ? Self.red : Self.white))
+            }
+            // ปากถุง (วงรีเข้มมองเห็นด้านใน)
+            var mouthCtx = ctx
+            mouthCtx.translateBy(x: mouth.x, y: mouth.y)
+            mouthCtx.rotate(by: .radians(angles[0]))
+            mouthCtx.fill(Path(ellipseIn: CGRect(x: -1.5 * s, y: -widths[0], width: 3 * s, height: widths[0] * 2)),
+                          with: .color(Self.redDark))
+        }
+        .frame(width: 44, height: 30)
+        .shadow(color: .black.opacity(0.35), radius: 1.5, y: 1)
+        .help("ถุงลมระดับ \(Self.level(speed))/5")
     }
 }
