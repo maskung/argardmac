@@ -138,7 +138,7 @@ struct RainRadarView: View {
             if let c = store.radar?.nowcast, !c.outlook.isEmpty {
                 OutlookBars(points: c.outlook)
                     .frame(height: 90)
-                Text("ความแรงฝนที่คาดว่าจะผ่านสวน ทุก 5 นาที (เลื่อนภาพล่าสุดตามทิศที่ฝนเคลื่อน) — เส้นเหลือง = ตอนนี้")
+                Text("ความแรงฝนที่คาดว่าจะผ่านสวน ทุก 5 นาที นับจากตอนนี้ (เลื่อนภาพเรดาร์ล่าสุดตามทิศที่ฝนเคลื่อน)")
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
@@ -363,16 +363,15 @@ private struct OutlookBars: View {
     let points: [OutlookPoint]
 
     var body: some View {
+        // ภาพเรดาร์ช้ากว่าเวลาจริง — ตัดช่วงที่ผ่านไปแล้วทิ้ง ให้แท่งแรก = ตอนนี้เสมอ
+        let now = Date()
+        let ahead = points.filter { $0.time.timeIntervalSince(now) > -150 }
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height - 14
-            let n = max(points.count, 1)
-            let bw = w / CGFloat(n)
-            let t0 = points.first?.time ?? Date(), t1 = points.last?.time ?? Date()
-            let span = max(t1.timeIntervalSince(t0), 1)
+            let bw = w / CGFloat(max(ahead.count, 1))
             ZStack(alignment: .topLeading) {
-                // เส้นฐาน + เส้นเกณฑ์ฝน 20 dBZ
                 Rectangle().fill(.white.opacity(0.15)).frame(width: w, height: 1).offset(y: h)
-                ForEach(Array(points.enumerated()), id: \.offset) { i, p in
+                ForEach(Array(ahead.enumerated()), id: \.offset) { i, p in
                     let v = max(0, min(65, p.dbz) - 10)
                     let bh = CGFloat(v) / 55 * h
                     RoundedRectangle(cornerRadius: 1.5)
@@ -381,20 +380,21 @@ private struct OutlookBars: View {
                         .frame(width: max(bw - 2, 1), height: max(bh, 1))
                         .offset(x: CGFloat(i) * bw + 1, y: h - max(bh, 1))
                 }
-                // ตอนนี้ (ภาพเรดาร์ช้ากว่าจริง จึงไม่ได้อยู่ที่ขอบซ้าย)
-                let nx = CGFloat(Date().timeIntervalSince(t0) / span) * (w - bw) + bw / 2
-                if nx >= 0, nx <= w {
-                    Rectangle().fill(.yellow).frame(width: 1.5, height: h).offset(x: nx)
+                if !ahead.contains(where: { $0.dbz >= RainRadarService.rainDBZ }) {
+                    Text("☀️ ไม่มีฝนผ่านสวนในช่วงนี้")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: w, height: h)
                 }
-                ForEach([0, 30, 60, 90, 120], id: \.self) { m in
-                    let x = CGFloat(Double(m) * 60 / span) * (w - bw) + bw / 2
-                    if x <= w {
-                        Text(t0.addingTimeInterval(Double(m) * 60).formatted(.dateTime.hour().minute()))
+                // ป้ายเวลาเทียบกับตอนนี้: ตอนนี้ / +30 / +60 / +90 นาที
+                ForEach([0, 30, 60, 90], id: \.self) { m in
+                    let i = m / 5
+                    if i < ahead.count {
+                        Text(m == 0 ? "ตอนนี้" : "+\(m) นาที")
                             .font(.system(size: 9))
-                            .monospacedDigit()
                             .foregroundStyle(.white.opacity(0.45))
                             .fixedSize()
-                            .position(x: min(max(x, 14), w - 14), y: h + 8)
+                            .position(x: min(max(CGFloat(i) * bw + bw / 2, 16), w - 22), y: h + 8)
                     }
                 }
             }
